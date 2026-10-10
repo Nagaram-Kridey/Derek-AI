@@ -87,7 +87,7 @@ def research_report(report_id):
 @shared_task(name="assistant.execute_run", soft_time_limit=1140, time_limit=1200)
 def execute_run(run_id):
     with transaction.atomic():
-        run = m.WorkflowRun.objects.select_for_update().select_related("user", "workflow").get(pk=run_id)
+        run = m.WorkflowRun.objects.select_for_update(of=("self",)).select_related("user", "workflow").get(pk=run_id)
         if run.status != "queued" or not run_allowed(run):
             return
         if run.step_index >= len(run.snapshot["steps"]):

@@ -52,7 +52,7 @@ Checked items have local verification evidence. Provider-dependent items remain 
 - [ ] Pair the Windows device, approve folders and sign into the assistant browser profile manually.
 - [ ] Choose initial workflows and review their triggers and permitted actions before enabling.
 - [ ] Start Docker Desktop for container/Redis checks; install the optional companion browser/audio dependencies.
-- [x] Connected this workspace to `https://github.com/Nagaram-Kridey/Derek-AI.git` on `main`, preserving the repository's initial commit. The included CI workflow will run when the implementation is pushed; remote CI verification is tracked separately.
+- [x] Published the project to `https://github.com/Nagaram-Kridey/Derek-AI` on `main`, preserving the initial repository history. Local `origin/main` matches the implementation commit; GitHub Actions was triggered and its remote result is tracked separately.
 
 ## Verification record
 
@@ -69,6 +69,8 @@ Checked items have local verification evidence. Provider-dependent items remain 
 | Production Compose config with placeholder domain/image and `--no-env-resolution` | Valid; actual host env/secrets not validated |
 | Local HTTP smoke | Dashboard returned 200; backend `/health/` returned `status: ok` |
 | Browser smoke in disposable database | Login, draft save, Reports, Activity and Settings passed; no real credentials or website actions used |
+| GitHub publication | Implementation commit `eef27cc` pushed to `Nagaram-Kridey/Derek-AI` on `main`; local and remote commit IDs matched |
+| Remote GitHub Actions | Initial run passed dashboard/infrastructure checks and exposed PostgreSQL locking failures in 3 backend tests. Corrected nullable-join locks to lock only their own rows; follow-up verification pending. [Initial run](https://github.com/Nagaram-Kridey/Derek-AI/actions/runs/38058298496) |
 | Live Gemini/Calendar/Telegram/Cartesia, microphone, real websites, AWS | Not performed: account/hardware/deployment setup pending |
 
 ## Next actions
@@ -89,3 +91,5 @@ Known v1 limits: one app host; manual handling of MFA/CAPTCHAs and uncertain act
 - 2026-10-10: Started the real local backend at `http://127.0.0.1:8000` and dashboard at `http://127.0.0.1:5173` on user request. HTTP/health checks passed. Created ignored `.env` with generated development/encryption keys; provider credentials remain empty. Owner account setup is pending (zero active owners). Background Redis/Celery workers are not running yet.
 - 2026-10-10: Owner account is now present. Changed its username from `owner` to `Kridey` at the user's request and verified the saved value. Sign in using `Kridey` and the existing password; provider setup remains pending.
 - 2026-10-10: Connected the local Git repository to `Nagaram-Kridey/Derek-AI`, retained the initial remote history and prepared the implementation for publication. Local credentials, databases, dependencies, generated reports, Terraform state and caches are excluded from Git.
+- 2026-10-10: Pushed the implementation as commit `eef27cc656e1aa9c0d9931401a771f3032ec9aab` to `main` and verified the remote commit ID. A scan of the 90 tracked files confirmed local secret values and runtime data were excluded. GitHub Actions started for the published implementation.
+- 2026-10-10: Remote PostgreSQL tests identified `FOR UPDATE` locking across nullable workflow joins. Restricted workflow-run and desktop-job locks to their own rows, preserving queue/approval behavior, and corrected the CI database health-check name. Follow-up local/remote checks are being run.

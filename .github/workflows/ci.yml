@@ -10,7 +10,7 @@ jobs:
         image: postgres:16
         env: {POSTGRES_USER: lily, POSTGRES_PASSWORD: test-only, POSTGRES_DB: lilyleo}
         ports: ["5432:5432"]
-        options: --health-cmd "pg_isready -U lily" --health-interval 5s --health-timeout 5s --health-retries 20
+        options: --health-cmd "pg_isready -U lily -d lilyleo" --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       DJANGO_DEBUG: "true"
       DATABASE_URL: postgresql://lily:test-only@localhost:5432/lilyleo

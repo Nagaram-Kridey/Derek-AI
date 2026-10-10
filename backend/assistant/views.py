@@ -282,7 +282,7 @@ def claim_job(request):
     with transaction.atomic():
         if m.DesktopJob.objects.filter(device=request.device, status="leased").exists():
             return Response({"job": None})
-        for job in m.DesktopJob.objects.select_for_update().filter(user=request.user, status="queued").select_related("run__workflow", "run__user").order_by("created_at")[:20]:
+        for job in m.DesktopJob.objects.select_for_update(of=("self",)).filter(user=request.user, status="queued").select_related("run__workflow", "run__user").order_by("created_at")[:20]:
             if not services.run_allowed(job.run):
                 continue
             token = secrets.token_urlsafe(32)
