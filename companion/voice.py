@@ -59,7 +59,7 @@ def voice_loop(config):
                 continue
             print("You:", text)
             result = client.turn(text)
-            print("Lily-Leo:", result["reply_text"])
+            print("Derek:", result["reply_text"])
             try:
                 speak(result["reply_text"], config)
             except Exception:

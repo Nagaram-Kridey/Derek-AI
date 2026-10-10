@@ -37,7 +37,7 @@ resource "aws_vpc" "main" {
   cidr_block = "10.73.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support = true
-  tags = { Name = "lilyleo" }
+  tags = { Name = "Derek" }
 }
 resource "aws_internet_gateway" "main" { vpc_id = aws_vpc.main.id }
 resource "aws_subnet" "public" {
@@ -135,7 +135,7 @@ resource "aws_elasticache_subnet_group" "main" {
 }
 resource "aws_elasticache_replication_group" "main" {
   replication_group_id = "lilyleo"
-  description = "Lily-Leo private task queue"
+  description = "Derek private task queue"
   node_type = "cache.t3.micro"
   num_cache_clusters = 1
   engine = "redis"
@@ -228,7 +228,7 @@ resource "aws_instance" "app" {
     redis_host = aws_elasticache_replication_group.main.primary_endpoint_address,
     bucket = aws_s3_bucket.reports.id
   })
-  tags = { Name = "lilyleo" }
+  tags = { Name = "Derek" }
 }
 resource "aws_eip" "app" {
   domain = "vpc"

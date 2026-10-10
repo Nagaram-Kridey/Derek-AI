@@ -1,4 +1,4 @@
-# Lily-Leo X
+# Derek
 
 Source repository: [Nagaram-Kridey/Derek-AI](https://github.com/Nagaram-Kridey/Derek-AI).
 
@@ -53,6 +53,8 @@ Alternatively, run the complete local PostgreSQL/Redis/app/worker/Beat stack wit
 Provider credentials are configured on your machine or in AWS Secrets Manager, never in the dashboard or repository. Google refresh credentials are encrypted in the database. The browser profile is local and is never sent to the backend.
 
 ## Pair the Windows companion
+
+Existing installations use the `LILYLEO_*` configuration keys and `LilyLeo` profile folder for compatibility. These identifiers are supported by Derek and retain access to saved browser sessions and execution checkpoints.
 
 In dashboard Settings, pair a device and copy its one-time credential to `LILYLEO_DEVICE_TOKEN` in `.env`. Set `LILYLEO_API_URL` to your HTTPS deployment, or enable `LILYLEO_ALLOW_LOCAL_HTTP=true` for loopback development only.
 

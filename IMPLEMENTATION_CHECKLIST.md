@@ -1,4 +1,4 @@
-# Lily-Leo X — Implementation Checklist
+# Derek — Implementation Checklist
 
 Last updated: 2026-10-10 (Asia/Kolkata)
 
@@ -94,3 +94,4 @@ Known v1 limits: one app host; manual handling of MFA/CAPTCHAs and uncertain act
 - 2026-10-10: Pushed the implementation as commit `eef27cc656e1aa9c0d9931401a771f3032ec9aab` to `main` and verified the remote commit ID. A scan of the 90 tracked files confirmed local secret values and runtime data were excluded. GitHub Actions started for the published implementation.
 - 2026-10-10: Remote PostgreSQL tests identified `FOR UPDATE` locking across nullable workflow joins. Restricted workflow-run and desktop-job locks to their own rows, preserving queue/approval behavior, and corrected the CI database health-check name. Follow-up local/remote checks are being run.
 - 2026-10-10: Correction commit `f3ec21fb8001f3008415df479f75efb4a31c9118` passed all three GitHub Actions jobs. Local regression suite also passed all 44 Python tests. This final documentation-only status update skips a duplicate CI run; implementation verification is linked above. Local and remote `main` are synchronized after publication.
+- 2026-10-10: Rebranded the assistant to `Derek` across dashboard branding/title/chat, model identity, companion CLI/voice, report/export names and current documentation. Verified the name on the running authenticated dashboard. Frontend tests/build, report export test, Django check, companion CLI help and Terraform validation passed; the backend was restarted to load the new identity. Configuration and persisted session/profile identifiers retain compatibility with existing installations. Repository publication is being completed.

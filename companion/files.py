@@ -49,7 +49,7 @@ def execute_file(tool, args, policy, approved_risk=None):
             raise PolicyError("Only regular files can be replaced.")
         temporary = None
         try:
-            with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".lilyleo-", delete=False) as target:
+            with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".derek-", delete=False) as target:
                 temporary = Path(target.name)
                 target.write(content.encode("utf-8"))
                 target.flush()

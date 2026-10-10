@@ -195,7 +195,7 @@ def reports(request, pk=None):
         file = getattr(row, fmt)
         if row.status != "completed" or not file:
             return Response({"detail": "Report file is not ready"}, status=409)
-        return FileResponse(file.open("rb"), as_attachment=True, filename=f"LilyLeo-{row.id}.{fmt}")
+        return FileResponse(file.open("rb"), as_attachment=True, filename=f"Derek-{row.id}.{fmt}")
     return Response([{**data(row, ["docx", "pdf"]), "summary": row.content.get("executive_summary", ""), "files": {"pdf": bool(row.pdf), "docx": bool(row.docx)}} for row in m.Report.objects.filter(user=request.user).order_by("-created_at")[:200]])
 
 @api_view(["GET"])
@@ -360,7 +360,7 @@ def calendar_callback(request):
     credentials["expires_at"] = timezone.now().timestamp()+credentials.get("expires_in", 3600)
     encrypt_credentials(user, "google", credentials)
     audit(user, "calendar.connected")
-    return HttpResponse('<p>Google Calendar connected. Return to your <a href="/">Lily-Leo workspace</a>.</p>')
+    return HttpResponse('<p>Google Calendar connected. Return to your <a href="/">Derek workspace</a>.</p>')
 
 @api_view(["GET", "DELETE"])
 def calendar_events(request):
@@ -373,7 +373,7 @@ def calendar_events(request):
 
 @api_view(["GET"])
 def export_data(request):
-    return Response({"conversations": [{**data(row), "messages": list(row.messages.values("role", "content", "created_at"))} for row in m.Conversation.objects.filter(user=request.user)], "tasks": [data(row) for row in m.ScheduledTask.objects.filter(user=request.user)], "workflows": [data(row) for row in m.Workflow.objects.filter(user=request.user)], "reports": [data(row, ["docx", "pdf"]) for row in m.Report.objects.filter(user=request.user)], "audit": [data(row) for row in m.AuditEvent.objects.filter(user=request.user)]}, headers={"Content-Disposition": 'attachment; filename="lilyleo-export.json"'})
+    return Response({"conversations": [{**data(row), "messages": list(row.messages.values("role", "content", "created_at"))} for row in m.Conversation.objects.filter(user=request.user)], "tasks": [data(row) for row in m.ScheduledTask.objects.filter(user=request.user)], "workflows": [data(row) for row in m.Workflow.objects.filter(user=request.user)], "reports": [data(row, ["docx", "pdf"]) for row in m.Report.objects.filter(user=request.user)], "audit": [data(row) for row in m.AuditEvent.objects.filter(user=request.user)]}, headers={"Content-Disposition": 'attachment; filename="derek-export.json"'})
 
 @api_view(["DELETE"])
 def delete_history(request):
@@ -411,4 +411,4 @@ def dashboard(request):
     path = settings.BASE_DIR / "staticapp" / "index.html"
     if path.exists():
         return HttpResponse(path.read_text(encoding="utf-8"))
-    return HttpResponse("Lily-Leo backend is running. Start the dashboard with npm run dev in web_dashboard.")
+    return HttpResponse("Derek backend is running. Start the dashboard with npm run dev in web_dashboard.")

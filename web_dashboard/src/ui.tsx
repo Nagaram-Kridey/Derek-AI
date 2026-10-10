@@ -27,7 +27,7 @@ const paths: Record<IconName, ReactNode> = {
 export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
-export function Brand() { return <div className="brand"><span className="brand-mark"><Icon name="spark" size={24}/></span><span>Lily-Leo <small>X</small></span></div>; }
+export function Brand() { return <div className="brand"><span className="brand-mark"><Icon name="spark" size={24}/></span><span>Derek</span></div>; }
 export function ErrorNotice({ message }: { message: string | null }) { return message ? <div className="notice error" role="alert">{message}</div> : null; }
 export function Empty({ icon = 'spark', title, children }: { icon?: IconName; title: string; children: ReactNode }) { return <div className="empty"><span className="empty-icon"><Icon name={icon} size={28}/></span><h3>{title}</h3><p>{children}</p></div>; }
 export function Badge({ status = 'draft' }: { status?: string | boolean }) {

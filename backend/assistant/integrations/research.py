@@ -96,7 +96,7 @@ def safe_fetch(url: str, max_bytes=MAX_SOURCE_BYTES) -> dict:
             host, pinned, sni = resolve_public_url(current)
             if time.monotonic() >= deadline:
                 raise ProviderError("Source fetch exceeded its time limit.")
-            with client.stream("GET", pinned, headers={"Host": host, "User-Agent": "LilyLeoX-Research/1.0", "Accept": "text/html,text/plain"},
+            with client.stream("GET", pinned, headers={"Host": host, "User-Agent": "Derek-Research/1.0", "Accept": "text/html,text/plain"},
                                extensions={"sni_hostname": sni}) as response:
                 if response.status_code in {301, 302, 303, 307, 308}:
                     location = response.headers.get("location")

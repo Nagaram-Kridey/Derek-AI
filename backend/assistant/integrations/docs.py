@@ -12,6 +12,8 @@ def generate_report(report, output_dir):
     folder.mkdir(parents=True, exist_ok=True)
     paths = {kind: folder / f"report.{kind}" for kind in ("docx", "pdf")}
     doc = Document()
+    doc.core_properties.author = "Derek"
+    doc.core_properties.subject = "Research report"
     doc.add_heading(report["title"], 0)
     blocks = [("Executive summary", report.get("executive_summary", ""))]
     for i, finding in enumerate(report.get("key_findings", []), 1):
@@ -36,7 +38,7 @@ def generate_report(report, output_dir):
     def footer(canvas, document):
         canvas.setFillColor(colors.HexColor("#52616b"))
         canvas.setFont("Helvetica", 8)
-        canvas.drawString(inch * .7, inch * .45, "Lily-Leo X • Research report")
+        canvas.drawString(inch * .7, inch * .45, "Derek • Research report")
         canvas.drawRightString(document.pagesize[0] - inch * .7, inch * .45, f"Page {document.page}")
     SimpleDocTemplate(str(paths["pdf"]), rightMargin=.7*inch, leftMargin=.7*inch, topMargin=.7*inch, bottomMargin=.7*inch).build(story, onFirstPage=footer, onLaterPages=footer)
     return {key: str(value) for key, value in paths.items()}

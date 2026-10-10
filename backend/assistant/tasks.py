@@ -46,7 +46,7 @@ def build_report(row):
     from .integrations.research import run_research
     from .integrations.docs import generate_report
     content = run_research(row.content.get("topic", row.title), BudgetGateway(row.user), include_academic=row.content.get("include_academic", False))
-    with TemporaryDirectory(prefix="lilyleo-report-") as folder:
+    with TemporaryDirectory(prefix="derek-report-") as folder:
         paths = generate_report(content, folder)
         for extension in ("docx", "pdf"):
             with Path(paths[extension]).open("rb") as source:

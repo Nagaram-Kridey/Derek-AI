@@ -1,8 +1,8 @@
-# Lily-Leo X — Autonomous Multimodal Voice Assistant
+# Derek — Autonomous Multimodal Voice Assistant
 ## Full System Architecture, Build Methods & Implementation Plan
 
 **Prepared for:** Nagaram Kridey (B.Tech CSE – AI Specialisation, Python/Django Developer)
-**Purpose:** Extend the existing *Lily-Leo — AI Voice Assistant* resume project into a production-grade, LLM-orchestrated, voice-first research & scheduling assistant, without discarding any existing skills — every module below is deliberately mapped onto skills already on the resume (Django REST Framework, pytest, MongoDB/PostgreSQL, Docker, Kubernetes (familiar), AWS, CI/CD, Selenium-style testing discipline, React/Node, gRPC (familiar), RAG/LLM/NLP) so the project *upgrades* the resume rather than replacing it.
+**Purpose:** Extend the existing *Derek — AI Voice Assistant* resume project into a production-grade, LLM-orchestrated, voice-first research & scheduling assistant, without discarding any existing skills — every module below is deliberately mapped onto skills already on the resume (Django REST Framework, pytest, MongoDB/PostgreSQL, Docker, Kubernetes (familiar), AWS, CI/CD, Selenium-style testing discipline, React/Node, gRPC (familiar), RAG/LLM/NLP) so the project *upgrades* the resume rather than replacing it.
 **Document type:** Build specification, intended to be consumed directly by a code-generation LLM (e.g., Claude Code, Cursor, Copilot Workspace) to scaffold and implement the system section by section.
 
 ---
@@ -61,7 +61,7 @@ Build one subsystem at a time, run its tests (Section 7.9) before moving to the 
 
 ## 1. Executive Summary
 
-**Lily-Leo X** is the successor to the existing *Lily-Leo* CLI voice assistant. It keeps the original's open-source, modular, well-tested Python philosophy and adds:
+**Derek** is the successor to the existing *Derek* CLI voice assistant. It keeps the original's open-source, modular, well-tested Python philosophy and adds:
 
 - An **LLM-first brain** (Google Gemini as the primary reasoning/orchestration model, with tool-calling, grounding, and a real-time audio Live API) instead of the earlier intent-classifier approach — while keeping the >85% intent-accuracy NLP work as a fast local fallback/offline mode.
 - A **deep research engine** that plans multi-step queries, searches the open web *and* academic sources, cross-verifies every claim against ≥2 independent sources before it is allowed into a report, and auto-generates cited Word/PDF deliverables.
@@ -72,9 +72,9 @@ Build one subsystem at a time, run its tests (Section 7.9) before moving to the 
 
 ## 2. Resume & ATS Alignment Map
 
-This project must **add** keywords, not repeat ones already covered by Lily-Leo v1, SHL RAG Scraper, and the Traffic Congestion Analyzer. New ATS-relevant terms this build introduces:
+This project must **add** keywords, not repeat ones already covered by Derek v1, SHL RAG Scraper, and the Traffic Congestion Analyzer. New ATS-relevant terms this build introduces:
 
-| Resume skill already listed | How Lily-Leo X extends it |
+| Resume skill already listed | How Derek extends it |
 |---|---|
 | Django, DRF, REST APIs, pytest | Method A production backend, task/reminder models, full test suite |
 | LLMs, RAG, prompt engineering, Transformers | Gemini function-calling, retrieval-augmented deep research, multi-agent planning |
@@ -113,7 +113,7 @@ Suggested future resume bullet (fill in real metrics once measured):
 | Voice round-trip latency (local mic → spoken reply) | < 2.5s p50 for simple commands, < 6s for research previews | Timed integration test harness |
 | STT word error rate | < 8% on clean audio (English) | Benchmark against LibriSpeech-style dev set or self-recorded set |
 | TTS naturalness | MOS ≥ 4.0/5 (Cartesia) or ≥ 3.5/5 (self-hosted) | Small human eval panel / Cartesia published MOS |
-| Intent/tool-routing accuracy | ≥ 90% correct tool selection on a 50-command eval set | Automated eval harness (pytest + fixtures), improving on Lily-Leo v1's 85% |
+| Intent/tool-routing accuracy | ≥ 90% correct tool selection on a 50-command eval set | Automated eval harness (pytest + fixtures), improving on Derek v1's 85% |
 | Source verification precision | ≥ 95% of citations resolve to a live, on-topic source | Automated citation-resolution checker |
 | Scheduler reliability | 0 missed jobs across 30-day soak test | Scheduler audit log analysis |
 | Test coverage | ≥ 85% line coverage on core orchestrator/research/scheduler modules | pytest-cov in CI |
@@ -123,7 +123,7 @@ Suggested future resume bullet (fill in real metrics once measured):
 
 ## 5. High-Level Architecture (shared by every build method)
 
-Regardless of which of the 3 methods in Section 6 is used to wire things together, Lily-Leo X is always composed of the same nine logical layers. Methods A/B/C differ only in *how* these layers are deployed and how they talk to each other (in-process function calls vs REST/gRPC vs an agent graph).
+Regardless of which of the 3 methods in Section 6 is used to wire things together, Derek is always composed of the same nine logical layers. Methods A/B/C differ only in *how* these layers are deployed and how they talk to each other (in-process function calls vs REST/gRPC vs an agent graph).
 
 ```
                          ┌───────────────────────────────────────────┐
@@ -836,7 +836,7 @@ class CartesiaTTS:
 """Wake-word detection runs fully on-device (Porcupine/openWakeWord) so the
 assistant is not always streaming audio to any cloud API."""
 class WakeWordDetector:
-    def __init__(self, keyword: str = "hey lily"):
+    def __init__(self, keyword: str = "hey derek"):
         ...
     def listen(self, on_wake):
         """Blocks on the microphone stream; calls on_wake() when the

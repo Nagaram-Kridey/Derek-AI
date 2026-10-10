@@ -1,4 +1,4 @@
-# Lily-Leo X — Lean Build Plan & Phase Checklist
+# Derek — Lean Build Plan & Phase Checklist
 ## Recommended Route Only: Method A (Django Monolith) + Method C (Agentic Graph as its Brain)
 
 This supersedes the roadmap in Section 11 of `LilyLeoX_Architecture_Plan.md` with a **tighter, scope-locked** plan. Nothing here adds new work beyond what was already recommended — it locks the route to the single best path (A hosting C) and actively **cuts** anything that would make the build harder without a corresponding, necessary payoff.

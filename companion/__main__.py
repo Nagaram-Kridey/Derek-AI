@@ -3,7 +3,7 @@ import logging
 from .config import Config
 
 def main():
-    parser = argparse.ArgumentParser(description="Lily-Leo Windows companion")
+    parser = argparse.ArgumentParser(description="Derek Windows companion")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("run", help="Poll paired desktop jobs")
     login = sub.add_parser("login", help="Sign into the dedicated browser manually")
