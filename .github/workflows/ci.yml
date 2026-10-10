@@ -1,0 +1,42 @@
+name: application-checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_USER: lily, POSTGRES_PASSWORD: test-only, POSTGRES_DB: lilyleo}
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U lily" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DJANGO_DEBUG: "true"
+      DATABASE_URL: postgresql://lily:test-only@localhost:5432/lilyleo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - run: pip install -r requirements-dev.txt
+      - run: python backend/manage.py check
+      - run: python backend/manage.py makemigrations --check --dry-run
+      - run: pytest
+  dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run: {working-directory: web_dashboard}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "24", cache: npm, cache-dependency-path: web_dashboard/package-lock.json}
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+  infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform -chdir=infra/aws init -backend=false
+      - run: terraform -chdir=infra/aws validate

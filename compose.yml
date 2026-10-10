@@ -1,0 +1,73 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: lilyleo
+      POSTGRES_USER: lily
+      POSTGRES_PASSWORD: lily-local-only
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lily -d lilyleo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    ports: ["127.0.0.1:6379:6379"]
+    volumes: ["redis:/data"]
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  web:
+    build: .
+    image: lilyleo:local
+    env_file:
+      - path: .env
+        required: false
+    environment: &app-env
+      DJANGO_DEBUG: "true"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-local-development-only-change-before-hosting}
+      DATABASE_URL: postgresql://lily:lily-local-only@db:5432/lilyleo
+      REDIS_URL: redis://redis:6379/0
+      RUN_MIGRATIONS: "true"
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: ["reports:/app/backend/media"]
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+  worker:
+    image: lilyleo:local
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *app-env
+      RUN_MIGRATIONS: "false"
+    command: ["celery", "-A", "config", "worker", "--loglevel=INFO", "--concurrency=2"]
+    volumes: ["reports:/app/backend/media"]
+    depends_on:
+      web: {condition: service_healthy}
+  beat:
+    image: lilyleo:local
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *app-env
+      RUN_MIGRATIONS: "false"
+    command: ["celery", "-A", "config", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    depends_on:
+      web: {condition: service_healthy}
+volumes:
+  postgres:
+  redis:
+  reports:

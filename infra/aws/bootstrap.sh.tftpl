@@ -1,0 +1,22 @@
+#!/bin/bash
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y docker.io docker-compose-v2 unzip curl
+systemctl enable --now docker
+curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscli.zip
+unzip -q /tmp/awscli.zip -d /tmp
+/tmp/aws/install
+install -d -m 700 /opt/lilyleo
+cat > /opt/lilyleo/deployment.env <<'ENV'
+DJANGO_DEBUG=false
+DJANGO_ALLOWED_HOSTS=${domain},localhost,127.0.0.1
+AWS_REGION=${region}
+LILYLEO_SECRET_ARN=${app_secret}
+DATABASE_SECRET_ARN=${db_secret}
+REDIS_SECRET_ARN=${redis_secret}
+DATABASE_HOST=${db_host}
+REDIS_HOST=${redis_host}
+AWS_STORAGE_BUCKET_NAME=${bucket}
+ENV
+chmod 600 /opt/lilyleo/deployment.env

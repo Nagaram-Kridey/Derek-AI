@@ -1,0 +1,19 @@
+Django>=5.2,<5.3
+djangorestframework>=3.16,<3.17
+celery[redis]>=5.5,<6
+dj-database-url>=2.3,<4
+psycopg[binary]>=3.2,<4
+httpx>=0.28,<1
+google-genai>=1.0,<3
+pydantic>=2.10,<3
+dateparser>=1.2,<2
+python-docx>=1.1,<2
+reportlab>=4.2,<5
+tldextract>=5.1,<6
+cryptography>=44,<47
+boto3>=1.35,<2
+django-storages[s3]>=1.14,<2
+whitenoise>=6.8,<7
+gunicorn>=23,<24; sys_platform != 'win32'
+tzdata>=2025.1
+python-dotenv>=1.0,<2

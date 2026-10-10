@@ -1,0 +1,46 @@
+services:
+  web:
+    image: ${IMAGE_URI:?Set IMAGE_URI}
+    restart: unless-stopped
+    env_file: /opt/lilyleo/deployment.env
+    environment:
+      RUN_MIGRATIONS: "true"
+    logging: &cloud-logs
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION:-ap-south-1}
+        awslogs-group: /lilyleo/app
+        awslogs-create-group: "true"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8000/health/',headers={'X-Forwarded-Proto':'https','Host':'${DOMAIN}'}))"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+  worker:
+    image: ${IMAGE_URI}
+    restart: unless-stopped
+    env_file: /opt/lilyleo/deployment.env
+    command: ["celery", "-A", "config", "worker", "--loglevel=INFO", "--concurrency=2"]
+    logging: *cloud-logs
+    depends_on:
+      web: {condition: service_healthy}
+  beat:
+    image: ${IMAGE_URI}
+    restart: unless-stopped
+    env_file: /opt/lilyleo/deployment.env
+    command: ["celery", "-A", "config", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    logging: *cloud-logs
+    depends_on:
+      web: {condition: service_healthy}
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN}
+    volumes:
+      - /opt/lilyleo/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [web]
+volumes:
+  caddy_data:
