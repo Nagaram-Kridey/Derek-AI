@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-10 (Asia/Kolkata)
 
-Status: **Local implementation complete; live setup and verification pending.** Backend, dashboard, companion, integrations and deployment configuration exist. Automated tests and an isolated browser smoke check passed. Production operation has not been verified.
+Status: **Implementation published; local and remote checks pass. Live setup and verification pending.** Backend, dashboard, companion, integrations and deployment configuration exist. Automated local tests, an isolated browser smoke check and GitHub Actions checks passed. Production operation has not been verified.
 
 Legend: **Pending** · **In progress** · **Implemented** (code exists) · **Verified** (named checks passed). An implemented feature is not automatically a verified feature.
 
@@ -70,7 +70,7 @@ Checked items have local verification evidence. Provider-dependent items remain 
 | Local HTTP smoke | Dashboard returned 200; backend `/health/` returned `status: ok` |
 | Browser smoke in disposable database | Login, draft save, Reports, Activity and Settings passed; no real credentials or website actions used |
 | GitHub publication | Implementation commit `eef27cc` pushed to `Nagaram-Kridey/Derek-AI` on `main`; local and remote commit IDs matched |
-| Remote GitHub Actions | Initial run passed dashboard/infrastructure checks and exposed PostgreSQL locking failures in 3 backend tests. Corrected nullable-join locks to lock only their own rows; follow-up verification pending. [Initial run](https://github.com/Nagaram-Kridey/Derek-AI/actions/runs/38058298496) |
+| Remote GitHub Actions | Passed: backend tests against PostgreSQL, dashboard tests/production build, and Terraform validation on implementation commit `f3ec21f`. [Successful workflow run](https://github.com/Nagaram-Kridey/Derek-AI/actions/runs/38058501665) |
 | Live Gemini/Calendar/Telegram/Cartesia, microphone, real websites, AWS | Not performed: account/hardware/deployment setup pending |
 
 ## Next actions
@@ -93,3 +93,4 @@ Known v1 limits: one app host; manual handling of MFA/CAPTCHAs and uncertain act
 - 2026-10-10: Connected the local Git repository to `Nagaram-Kridey/Derek-AI`, retained the initial remote history and prepared the implementation for publication. Local credentials, databases, dependencies, generated reports, Terraform state and caches are excluded from Git.
 - 2026-10-10: Pushed the implementation as commit `eef27cc656e1aa9c0d9931401a771f3032ec9aab` to `main` and verified the remote commit ID. A scan of the 90 tracked files confirmed local secret values and runtime data were excluded. GitHub Actions started for the published implementation.
 - 2026-10-10: Remote PostgreSQL tests identified `FOR UPDATE` locking across nullable workflow joins. Restricted workflow-run and desktop-job locks to their own rows, preserving queue/approval behavior, and corrected the CI database health-check name. Follow-up local/remote checks are being run.
+- 2026-10-10: Correction commit `f3ec21fb8001f3008415df479f75efb4a31c9118` passed all three GitHub Actions jobs. Local regression suite also passed all 44 Python tests. This final documentation-only status update skips a duplicate CI run; implementation verification is linked above. Local and remote `main` are synchronized after publication.
