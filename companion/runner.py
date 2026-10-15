@@ -59,7 +59,7 @@ class Worker:
                 status = self.client.heartbeat()
                 if status.get("paused") or job_id in status.get("stop_job_ids", []):
                     raise AttentionRequired("Automation was paused or cancelled. Inspect the last action before resuming.")
-            result = self.browser_executor(job["args"], job["policy"], self.config.browser_profile, start=start, approved_risk=approved, before_mutation=lambda i: self.journal.pending(job_id, i), checkpoint=lambda i: self.journal.checkpoint(job_id, i), observations=observations, check_interrupt=check_interrupt)
+            result = self.browser_executor(job["args"], job["policy"], self.config.browser_profile, browser_channel=getattr(self.config, "browser_channel", "chromium"), start=start, approved_risk=approved, before_mutation=lambda i: self.journal.pending(job_id, i), checkpoint=lambda i: self.journal.checkpoint(job_id, i), observations=observations, check_interrupt=check_interrupt)
             outcome = {"status": "completed", "result": result, "error": ""}
             self.journal.finish(job_id, outcome)
             return outcome

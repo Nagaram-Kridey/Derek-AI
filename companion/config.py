@@ -19,10 +19,13 @@ class Config:
     cartesia_model: str = "sonic-3.6"
     cartesia_version: str = "2026-08-14"
     whisper_model: str = "base.en"
+    browser_channel: str = "chromium"
+    turn_timeout_seconds: int = 120
 
     @property
     def browser_profile(self):
-        return self.state_dir / "browser-profile"
+        name = "browser-profile" if self.browser_channel == "chromium" else "browser-profile-" + self.browser_channel
+        return self.state_dir / name
 
     @classmethod
     def from_env(cls):
@@ -38,5 +41,8 @@ class Config:
             raise ValueError("LILYLEO_API_URL requires HTTPS; enable LILYLEO_ALLOW_LOCAL_HTTP only for a loopback development server.")
         if not parsed.hostname:
             raise ValueError("LILYLEO_API_URL is invalid.")
+        browser_channel = os.getenv("LILYLEO_BROWSER_CHANNEL", "chromium").strip().lower()
+        if browser_channel not in {"chromium", "chrome", "msedge"}:
+            raise ValueError("LILYLEO_BROWSER_CHANNEL must be chromium, chrome, or msedge.")
         default_state = Path(os.getenv("LOCALAPPDATA", str(Path.home() / ".local" / "share"))) / "LilyLeo"
-        return cls(api, os.getenv("LILYLEO_DEVICE_TOKEN", ""), os.getenv("LILYLEO_USER_TOKEN", ""), Path(os.getenv("LILYLEO_STATE_DIR", str(default_state))).expanduser().resolve(), max(1, float(os.getenv("LILYLEO_POLL_SECONDS", "5"))), local, os.getenv("CARTESIA_API_KEY", ""), os.getenv("CARTESIA_VOICE_ID", ""), os.getenv("CARTESIA_MODEL", "sonic-3.6"), os.getenv("CARTESIA_API_VERSION", "2026-08-14"), os.getenv("WHISPER_MODEL", "base.en"))
+        return cls(api, os.getenv("LILYLEO_DEVICE_TOKEN", ""), os.getenv("LILYLEO_USER_TOKEN", ""), Path(os.getenv("LILYLEO_STATE_DIR", str(default_state))).expanduser().resolve(), max(1, float(os.getenv("LILYLEO_POLL_SECONDS", "5"))), local, os.getenv("CARTESIA_API_KEY", ""), os.getenv("CARTESIA_VOICE_ID", ""), os.getenv("CARTESIA_MODEL", "sonic-3.6"), os.getenv("CARTESIA_API_VERSION", "2026-08-14"), os.getenv("WHISPER_MODEL", "base.en"), browser_channel, min(1800, max(30, int(os.getenv("LILYLEO_TURN_TIMEOUT_SECONDS", "120")))))

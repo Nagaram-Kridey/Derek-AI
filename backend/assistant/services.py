@@ -135,10 +135,10 @@ def tools():
     text = {"type": "string"}
     return [
         function("search_web", "Search current public internet information with sources", {"query": text}, ["query"]),
-        function("run_deep_research", "Queue cited research and DOCX/PDF exports", {"topic": text, "include_academic": {"type": "boolean"}}, ["topic"]),
+        function("run_deep_research", "Queue cited research and DOCX/PDF exports. Use report_kind=project_ideas for five enterprise software/AI project proposals ranked down to two detailed plans.", {"topic": text, "include_academic": {"type": "boolean"}, "report_kind": {"type": "string", "enum": ["standard", "project_ideas"]}}, ["topic"]),
         function("schedule_task", "Create a reminder or recurring research job. Ask if time is unclear. weekdays 0=Mon..6=Sun", {"name": text, "kind": {"type": "string", "enum": ["reminder", "research"]}, "payload": {"type": "object", "properties": {"message": text, "topic": text}}, "schedule": {"type": "object", "properties": {"kind": {"type": "string", "enum": ["once", "daily", "weekly"]}, "at": text, "time": text, "timezone": text, "weekdays": {"type": "array", "items": {"type": "integer"}}}}}, ["name", "kind", "payload", "schedule"]),
         function("calendar_list_events", "Read upcoming events from the connected owned calendar", {}, []),
-        function("draft_workflow", "Draft a workflow for user review. Never activate. Registered tools: file.list/read/write/move/delete, browser.run, calendar.create/update, research.run, notify. Each step has tool and args. Browser mutating actions require expected_url and expected_text; folders are absolute Windows paths. Ask for missing sites/folders first.", {"name": text, "description": text, "steps": {"type": "array", "items": {"type": "object", "properties": {"tool": text, "args": {"type": "object"}}, "required": ["tool", "args"]}}, "allowed_tools": {"type": "array", "items": text}, "allowed_domains": {"type": "array", "items": text}, "allowed_paths": {"type": "array", "items": text}, "trigger": {"type": "object", "properties": {"kind": text, "at": text, "time": text, "timezone": text, "weekdays": {"type": "array", "items": {"type": "integer"}}}}}, ["name", "steps", "allowed_tools", "allowed_domains", "allowed_paths"]),
+        function("draft_workflow", "Draft a workflow for user review. Never activate. Registered tools: file.list/read/write/move/delete, browser.run, calendar.create/update, research.run, notify. research.run args: topic, optional include_academic, report_kind (standard or project_ideas for five enterprise project proposals with two shortlisted plans). Each step has tool and args. Browser mutating actions require expected_url and expected_text; folders are absolute Windows paths. Ask for missing sites/folders first.", {"name": text, "description": text, "steps": {"type": "array", "items": {"type": "object", "properties": {"tool": text, "args": {"type": "object"}}, "required": ["tool", "args"]}}, "allowed_tools": {"type": "array", "items": text}, "allowed_domains": {"type": "array", "items": text}, "allowed_paths": {"type": "array", "items": text}, "trigger": {"type": "object", "properties": {"kind": text, "at": text, "time": text, "timezone": text, "weekdays": {"type": "array", "items": {"type": "integer"}}}}}, ["name", "steps", "allowed_tools", "allowed_domains", "allowed_paths"]),
     ]
 
 def turn(user, text, conversation_id=None):
@@ -171,7 +171,7 @@ def turn(user, text, conversation_id=None):
             elif name == "run_deep_research":
                 from .contracts import ResearchArgs
                 clean = ResearchArgs.model_validate(args)
-                report = m.Report.objects.create(user=user, title=clean.topic[:240], content={"include_academic": clean.include_academic, "topic": clean.topic})
+                report = m.Report.objects.create(user=user, title=clean.topic[:240], content={"include_academic": clean.include_academic, "topic": clean.topic, "report_kind": clean.report_kind})
                 from .tasks import research_report
                 kick(research_report, str(report.id))
                 response["job_id"] = str(report.id)

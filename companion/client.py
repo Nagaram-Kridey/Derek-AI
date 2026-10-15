@@ -27,7 +27,7 @@ class APIClient:
             raise ClientError("Set LILYLEO_USER_TOKEN for voice or LILYLEO_DEVICE_TOKEN for the worker.")
         request = Request(self.config.api_url + path, json.dumps(payload).encode("utf-8"), {"Authorization": ("Token " if user else "Device ") + token, "Content-Type": "application/json", "Accept": "application/json"}, method="POST")
         try:
-            with self.opener.open(request, timeout=120 if user else 30) as response:
+            with self.opener.open(request, timeout=getattr(self.config, "turn_timeout_seconds", 120) if user else 30) as response:
                 raw = response.read(4_000_001)
             if len(raw) > 4_000_000:
                 raise ClientError("API response is too large.")

@@ -45,7 +45,19 @@ def deliver_notification(notification_id):
 def build_report(row):
     from .integrations.research import run_research
     from .integrations.docs import generate_report
-    content = run_research(row.content.get("topic", row.title), BudgetGateway(row.user), include_academic=row.content.get("include_academic", False))
+    gateway = BudgetGateway(row.user)
+    topic = row.content.get("topic", row.title)
+    if row.content.get("report_kind") == "project_ideas":
+        topic = f"{topic[:1800]} Research as of {timezone.localdate().isoformat()}; use current primary sources and distinguish documented capabilities from speculative opportunities."
+    content = run_research(topic, gateway, include_academic=row.content.get("include_academic", False))
+    if row.content.get("report_kind") == "project_ideas":
+        from .integrations.project_ideas import add_project_ideas
+        recent = []
+        for prior in m.Report.objects.filter(user=row.user, status="completed", created_at__gte=timezone.now()-timedelta(days=7)).exclude(pk=row.pk).order_by("-created_at")[:14]:
+            recent.extend(idea["title"] for idea in prior.content.get("project_ideas", []) if isinstance(idea, dict) and "title" in idea)
+        content = add_project_ideas(content, gateway, recent)
+        content["title"] = f"Enterprise software and AI project ideas - {timezone.localdate().isoformat()}"
+        row.title = content["title"]
     with TemporaryDirectory(prefix="derek-report-") as folder:
         paths = generate_report(content, folder)
         for extension in ("docx", "pdf"):
@@ -54,6 +66,19 @@ def build_report(row):
     row.content, row.citations, row.status = content, content["citations"], "completed"
     row.save()
     return {"report_id": str(row.id), "title": row.title, "status": row.status}
+
+def deliver_report_file(row):
+    if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID:
+        from .integrations.telegram import send_document
+        try:
+            with TemporaryDirectory() as folder:
+                path = Path(folder) / f"{row.id}.pdf"
+                with row.pdf.open("rb") as source:
+                    path.write_bytes(source.read())
+                send_document(settings.TELEGRAM_BOT_TOKEN, settings.TELEGRAM_CHAT_ID, path)
+        except Exception:
+            # The report remains in the dashboard; uncertain delivery is not replayed.
+            audit(row.user, "report.telegram_failed", report_id=str(row.id))
 
 @shared_task(name="assistant.research_report", soft_time_limit=1140, time_limit=1200)
 def research_report(report_id):
@@ -66,16 +91,7 @@ def research_report(report_id):
     try:
         result = build_report(row)
         notify(row.user, f"Research report ready: {row.title}. Download it from Reports.")
-        if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID:
-            from .integrations.telegram import send_document
-            with TemporaryDirectory() as folder:
-                path = Path(folder) / f"{row.id}.pdf"
-                with row.pdf.open("rb") as source:
-                    path.write_bytes(source.read())
-                try:
-                    send_document(settings.TELEGRAM_BOT_TOKEN, settings.TELEGRAM_CHAT_ID, path)
-                except Exception:
-                    audit(row.user, "report.telegram_failed", report_id=str(row.id))
+        deliver_report_file(row)
         return result
     except Exception as exc:
         from .integrations.errors import ConfigError, ProviderError
@@ -106,9 +122,18 @@ def execute_run(run_id):
         if step["tool"] == "notify":
             result = {"notification_id": str(notify(run.user, step["args"]["message"]).id)}
         elif step["tool"] == "research.run":
-            row = m.Report.objects.create(user=run.user, title=step["args"]["topic"][:240], status="running", content={"include_academic": step["args"].get("include_academic", False), "topic": step["args"]["topic"]})
-            result = build_report(row)
-            notify(run.user, f"Research report ready: {row.title}.")
+            row = m.Report.objects.create(user=run.user, title=step["args"]["topic"][:240], status="running", content={"include_academic": step["args"].get("include_academic", False), "topic": step["args"]["topic"], "report_kind": step["args"].get("report_kind", "standard")})
+            try:
+                result = build_report(row)
+            except Exception as exc:
+                from .integrations.errors import ConfigError, ProviderError
+                row.status = "failed"
+                row.error = str(exc) if isinstance(exc, (ValueError, ConfigError, ProviderError)) else "Research failed. Check worker logs and provider configuration."
+                row.save()
+                audit(row.user, "report.failed", report_id=str(row.id))
+                raise
+            notify(run.user, f"Research report ready: {row.title}. PDF and DOCX are available in Reports.")
+            deliver_report_file(row)
         elif step["tool"] == "calendar.create":
             from .integrations.calendar import create_event
             result = create_event(calendar_token(run.user), step["args"])

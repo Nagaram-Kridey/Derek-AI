@@ -4,7 +4,7 @@ import os
 import tempfile
 import threading
 import wave
-from .client import APIClient
+from .client import APIClient, ClientError
 
 def speak(text, config):
     if not config.cartesia_key or not config.cartesia_voice:
@@ -58,7 +58,12 @@ def voice_loop(config):
                 print("No speech detected.")
                 continue
             print("You:", text)
-            result = client.turn(text)
+            try:
+                result = client.turn(text)
+            except ClientError as exc:
+                print("Derek couldn't answer:", exc)
+                print("Check the backend's provider configuration and availability, then try again. The voice client is still ready.")
+                continue
             print("Derek:", result["reply_text"])
             try:
                 speak(result["reply_text"], config)

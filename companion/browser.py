@@ -1,7 +1,11 @@
 """Visible Chromium automation using a dedicated local profile and typed actions."""
 
 from contextlib import contextmanager
+import os
+from pathlib import Path
 import re
+import shutil
+import subprocess
 
 from .policy import ApprovalRequired, AttentionRequired, DomainPolicy, PolicyError, RISKS, detect_risk
 
@@ -96,9 +100,9 @@ def execute_actions(page, actions, domains, *, start=0, approved_risk=None, befo
 
 
 @contextmanager
-def persistent_browser(profile, resolver_rules=None):
+def persistent_browser(profile, resolver_rules=None, *, browser_channel="chromium"):
     try:
-        from playwright.sync_api import sync_playwright
+        from playwright.sync_api import Error as PlaywrightError, sync_playwright
     except ImportError as exc:
         raise RuntimeError("Install companion browser dependencies and run: python -m playwright install chromium") from exc
     profile.mkdir(parents=True, exist_ok=True)
@@ -106,15 +110,22 @@ def persistent_browser(profile, resolver_rules=None):
         args = ["--force-webrtc-ip-handling-policy=disable_non_proxied_udp"]
         if resolver_rules:
             args.append("--host-resolver-rules=" + resolver_rules)
-        context = playwright.chromium.launch_persistent_context(str(profile), headless=False, service_workers="block", accept_downloads=False, args=args)
+        options = {"channel": browser_channel} if browser_channel in {"chrome", "msedge"} else {}
+        context = playwright.chromium.launch_persistent_context(str(profile), headless=False, service_workers="block", accept_downloads=False, args=args, **options)
         try:
             context.set_default_timeout(15_000)
             yield context
         finally:
-            context.close()
+            try:
+                context.close()
+            except PlaywrightError as exc:
+                # A user may already have closed the persistent browser window.
+                # Do not mask an earlier navigation error with cleanup failure.
+                if type(exc).__name__ != "TargetClosedError":
+                    raise
 
 
-def run_browser(args, policy, profile, **callbacks):
+def run_browser(args, policy, profile, *, browser_channel="chromium", **callbacks):
     domains = DomainPolicy(policy.get("allowed_domains", []))
     import socket
     import ipaddress
@@ -128,7 +139,7 @@ def run_browser(args, policy, profile, **callbacks):
     mappings.append("MAP * ~NOTFOUND")
     blocked = []
     external_interrupt = callbacks.pop("check_interrupt", lambda: None)
-    with persistent_browser(profile, ", ".join(mappings)) as context:
+    with persistent_browser(profile, ", ".join(mappings), browser_channel=browser_channel) as context:
         def route_request(route):
             try:
                 domains.check(route.request.url)
@@ -162,14 +173,52 @@ def run_browser(args, policy, profile, **callbacks):
         return execute_actions(page, args.get("actions"), domains, check_interrupt=check_interrupt, **callbacks)
 
 
-def manual_login(profile, url):
+def _installed_browser(channel):
+    """Locate an installed vendor browser for a human-controlled login session."""
+    vendor = {"chrome": ("Google", "Chrome", "Application", "chrome.exe"),
+              "msedge": ("Microsoft", "Edge", "Application", "msedge.exe")}[channel]
+    for root in (os.getenv("PROGRAMFILES"), os.getenv("PROGRAMFILES(X86)"), os.getenv("LOCALAPPDATA")):
+        if root:
+            executable = Path(root).joinpath(*vendor)
+            if executable.is_file():
+                return str(executable)
+    executable = shutil.which("google-chrome" if channel == "chrome" else "microsoft-edge")
+    if executable:
+        return executable
+    raise RuntimeError("Install Google Chrome or Microsoft Edge for the selected browser channel.")
+
+
+def manual_login(profile, url, *, browser_channel="chromium"):
     # Manual mode lets the user complete external identity-provider redirects.
     # It exposes no automation, credentials, or browser data to the server.
     from urllib.parse import urlsplit
     parsed = urlsplit(url)
     domains = DomainPolicy([parsed.hostname or ""])
     domains.check(url)
-    with persistent_browser(profile) as context:
-        page = context.pages[0] if context.pages else context.new_page()
-        page.goto(url, wait_until="domcontentloaded")
-        input("Sign in manually in the dedicated browser. Press Enter here when finished. ")
+    if browser_channel in {"chrome", "msedge"}:
+        profile.mkdir(parents=True, exist_ok=True)
+        # Human sign-in runs in a normal vendor browser with no automation or
+        # remote-debugging connection. Only Derek's dedicated profile is used.
+        process = subprocess.Popen([_installed_browser(browser_channel), "--user-data-dir=" + str(profile),
+                                    "--no-first-run", "--no-default-browser-check", "--disable-background-mode", "--new-window", url],
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print("A normal browser opened with Derek's separate local profile.")
+        input("Finish signing in, CLOSE all windows for this Derek profile, then press Enter here. ")
+        try:
+            code = process.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            raise AttentionRequired("Close all windows for the Derek browser profile before starting the companion worker.") from None
+        if code != 0:
+            raise AttentionRequired("The login browser did not exit normally. Close its windows and retry; sign-in success is not confirmed.")
+        print("Manual browser session finished. Sign-in success must still be confirmed on the website.")
+        return
+    from playwright.sync_api import Error as PlaywrightError
+    try:
+        with persistent_browser(profile) as context:
+            page = context.pages[0] if context.pages else context.new_page()
+            page.goto(url, wait_until="domcontentloaded")
+            input("Sign in manually in the dedicated browser. Press Enter here only after finishing sign-in. ")
+    except PlaywrightError as exc:
+        if type(exc).__name__ != "TargetClosedError":
+            raise
+        print("The login browser was closed. Run the login command again to continue; sign-in success has not been confirmed.")

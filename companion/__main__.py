@@ -22,8 +22,14 @@ def main():
     elif args.command == "login":
         from .browser import manual_login
         from .journal import WorkerLock
-        with WorkerLock(config.state_dir):
-            manual_login(config.browser_profile, args.url)
+        from .policy import AttentionRequired, PolicyError
+        try:
+            with WorkerLock(config.state_dir):
+                manual_login(config.browser_profile, args.url, browser_channel=config.browser_channel)
+        except (AttentionRequired, PolicyError, RuntimeError) as exc:
+            parser.exit(1, f"Login setup: {exc}\n")
+        except (EOFError, KeyboardInterrupt):
+            print("\nLogin session ended. Close the dedicated browser windows before starting the worker.")
     elif args.command == "voice":
         from .voice import voice_loop
         voice_loop(config)

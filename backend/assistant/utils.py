@@ -48,9 +48,9 @@ def reserve_usage(user, input_chars):
 class BudgetGateway:
     """Count every provider call, including internal research calls, before sending."""
     def __init__(self, user):
-        from .integrations.gemini import GeminiGateway
+        from .integrations.models import create_gateway
         self.user = user
-        self.gateway = GeminiGateway(settings.GEMINI_API_KEY, settings.GEMINI_MODEL)
+        self.gateway = create_gateway()
 
     def __getattr__(self, name):
         method = getattr(self.gateway, name)

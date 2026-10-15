@@ -163,7 +163,7 @@ def _evidence_window(text, claim, maximum=7000):
 
 
 def run_research(topic: str, gateway, include_academic=True) -> dict:
-    from .gemini import _topic
+    from .model_base import _topic
 
     topic = _topic(topic)
     queries = gateway.plan_research(topic)[:3]

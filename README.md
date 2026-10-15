@@ -2,7 +2,7 @@
 
 Source repository: [Nagaram-Kridey/Derek-AI](https://github.com/Nagaram-Kridey/Derek-AI).
 
-A personal assistant with a Django API, React dashboard, durable schedules and a Windows companion for approved file and browser workflows. Gemini handles chat and grounded research; Google Calendar, Telegram and Cartesia are optional connected services. See [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) for current implementation and verification status.
+A personal assistant with a Django API, React dashboard, durable schedules and a Windows companion for approved file and browser workflows. Choose Gemini for hosted generation/Google grounding, or Ollama for local generation with separate public web search. Google Calendar, Telegram and Cartesia are optional connected services. See [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) for current implementation and verification status.
 
 ## Start locally on Windows
 
@@ -14,7 +14,7 @@ python -m venv .venv
 Copy-Item .env.example .env
 ```
 
-Edit the ignored `.env` file. Generate a random Django secret and, for Calendar, a Fernet key. Set `GEMINI_API_KEY` and a model your Google account can access. Missing integrations return a setup error; the app does not simulate provider success.
+Edit the ignored `.env` file. Generate a random Django secret and, for Calendar, a Fernet key. Select `MODEL_PROVIDER=gemini` with an accessible Gemini key/model, or `MODEL_PROVIDER=ollama` with a downloaded local tool-capable model. See [LOCAL_MODELS.md](LOCAL_MODELS.md) for Windows setup, RAM requirements and search differences. Missing integrations return a setup error; the app does not simulate provider success.
 
 ```powershell
 .\.venv\Scripts\python backend/manage.py migrate
@@ -65,7 +65,11 @@ In dashboard Settings, pair a device and copy its one-time credential to `LILYLE
 .\.venv\Scripts\python -m companion run
 ```
 
-Manual login uses a dedicated Chromium profile under `%LOCALAPPDATA%/LilyLeo`. Stop the companion worker before signing in because only one process can use that profile. Sign-ins, passwords, MFA and CAPTCHAs are completed manually. Run the companion as your ordinary Windows user. Keep its state folder private.
+Manual login uses a dedicated browser profile under `%LOCALAPPDATA%/LilyLeo`; bundled Chromium is the default. Stop the companion worker before signing in because only one process can use that profile. Sign-ins, passwords, MFA and CAPTCHAs are completed manually. Run the companion as your ordinary Windows user. Keep its state folder private.
+
+For Google sign-in, set `LILYLEO_BROWSER_CHANNEL=chrome` (installed Google Chrome) or `msedge` (installed Microsoft Edge) in `.env`, then run the same `companion login` command. These channels open a normal, human-controlled vendor browser for login. Finish sign-in, close all windows for that Derek profile, then press Enter in the terminal. The worker later uses Playwright with the same browser channel and dedicated profile. Chrome and Edge each get a separate profile folder, leaving existing Chromium and personal browser profiles intact. Google can still require reauthentication or restrict automated access; use the Calendar OAuth connector for Calendar API tasks. See [Google's supported-browser guidance](https://support.google.com/accounts/answer/7675428?hl=en) and [Playwright browser channels](https://playwright.dev/python/docs/browsers#google-chrome--microsoft-edge).
+
+Closing the browser during manual login ends that session; it does not confirm a successful sign-in. Closed-browser cleanup is handled without a second `TargetClosedError` traceback. A sign-in session is ready only after you confirm success on the target website.
 
 For push-to-talk, set `LILYLEO_USER_TOKEN` using the current session token displayed through Settings, then run `python -m companion voice`. Device credentials cannot call chat APIs. Press Enter to record, Enter again to stop, and `q` to leave. The recording is capped at two minutes; microphone/speaker access and optional audio packages are required.
 

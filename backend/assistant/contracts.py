@@ -41,6 +41,7 @@ class BrowserArgs(Strict):
 class ResearchArgs(Strict):
     topic: str = Field(min_length=3, max_length=2000)
     include_academic: bool = False
+    report_kind: Literal["standard", "project_ideas"] = "standard"
 class NotifyArgs(Strict):
     message: str = Field(min_length=1, max_length=4000)
 class CalendarCreate(Strict):

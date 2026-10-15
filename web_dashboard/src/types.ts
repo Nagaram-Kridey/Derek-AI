@@ -14,5 +14,5 @@ export type Report = { id: Identifier; title: string; created_at: string; status
 export type Audit = { id: Identifier; action: string; created_at: string; details?: unknown; metadata?: unknown; actor?: string };
 export type Device = { id: Identifier; name: string; last_seen_at?: string | null; last_seen?: string | null; active?: boolean; created_at: string; credential?: string };
 export type Integration = boolean | { configured?: boolean; connected?: boolean; enabled?: boolean; status?: string };
-export type SystemStatus = { paused: boolean; desktop_online: boolean; scheduler_online?: boolean; scheduler_last_seen?: string; timezone: string; integrations: Record<string, Integration>; usage?: unknown };
+export type SystemStatus = { paused: boolean; desktop_online: boolean; scheduler_online?: boolean; scheduler_last_seen?: string; timezone: string; integrations: Record<string, Integration>; language_model?: {provider: string; model: string; local: boolean; web_search: string}; usage?: unknown };
 export type CalendarEvent = { id: string; summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string }; htmlLink?: string };

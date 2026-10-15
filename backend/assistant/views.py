@@ -210,7 +210,9 @@ def status(request):
         "timezone": settings.TIME_ZONE,
         "pending_runs": m.WorkflowRun.objects.filter(user=request.user, status__in=["queued", "waiting_desktop"]).count(),
         "attention_needed": m.WorkflowRun.objects.filter(user=request.user, status="needs_attention").count(),
-        "integrations": {"gemini": bool(settings.GEMINI_API_KEY), "telegram": bool(settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID), "cartesia": bool(settings.CARTESIA_API_KEY and settings.CARTESIA_VOICE_ID), "calendar": {"configured": bool(settings.GOOGLE_CLIENT_ID and settings.CREDENTIAL_ENCRYPTION_KEY), "connected": m.ProviderCredential.objects.filter(user=request.user, provider="google").exists()}},
+        "language_model": {"provider": settings.MODEL_PROVIDER, "model": settings.OLLAMA_MODEL if settings.MODEL_PROVIDER == "ollama" else settings.GEMINI_MODEL,
+                           "local": settings.MODEL_PROVIDER == "ollama", "web_search": "public search snippets" if settings.MODEL_PROVIDER == "ollama" else "Google Search grounding"},
+        "integrations": {"gemini": bool(settings.GEMINI_API_KEY), "ollama": settings.MODEL_PROVIDER == "ollama" and bool(settings.OLLAMA_MODEL), "telegram": bool(settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID), "cartesia": bool(settings.CARTESIA_API_KEY and settings.CARTESIA_VOICE_ID), "calendar": {"configured": bool(settings.GOOGLE_CLIENT_ID and settings.CREDENTIAL_ENCRYPTION_KEY), "connected": m.ProviderCredential.objects.filter(user=request.user, provider="google").exists()}},
         "usage": {**usage, "daily_call_limit": settings.DAILY_MODEL_CALL_LIMIT, "daily_input_char_limit": settings.DAILY_INPUT_CHAR_LIMIT},
     })
 
