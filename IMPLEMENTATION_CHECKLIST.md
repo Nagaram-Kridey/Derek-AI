@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-15 (Asia/Kolkata)
 
-Status: **Base implementation published; current setup and daily-project changes are local.** Local Ollama chat, public search, a reviewed first project-report PDF and outbound Telegram PDF delivery have now succeeded. Docker/Redis/worker/Beat are running. The daily 11 AM workflow is now enabled; next due 2026-10-16 at 11:00 Asia/Kolkata. Its first scheduled execution remains unverified. All first-report evidence remains unverified; proposal scores tied and the two MVPs were narrowed during setup review. Current changes have not had a new automated test run, and production operation remains unverified.
+Status: **Latest implementation published; live acceptance and regression verification remain in progress.** Local Ollama chat, public search, a reviewed first project-report PDF and outbound Telegram PDF delivery have now succeeded. Docker/Redis/worker/Beat are running. The daily 11 AM workflow is now enabled; next due 2026-10-16 at 11:00 Asia/Kolkata. Its first scheduled execution remains unverified. All first-report evidence remains unverified; proposal scores tied and the two MVPs were narrowed during setup review. Current changes have not had a new automated test run, and production operation remains unverified.
 
 Legend: **Pending** · **In progress** · **Implemented** (code exists) · **Verified** (named checks passed). An implemented feature is not automatically a verified feature.
 
@@ -115,7 +115,7 @@ Initial configuration review on 2026-10-15 found provider/device fields empty. F
 - [x] Generate and review the first completed PDF report; Telegram confirmed its outbound PDF delivery. DOCX visual review remains pending due to the missing renderer dependency.
 - [x] Daily workflow is enabled and has an active scheduled task; next due 2026-10-16 at 11:00 Asia/Kolkata.
 - [ ] Confirm a scheduled 11 AM execution and next-run time with the host awake.
-- [ ] Publish current local changes when requested. No new automated tests were run for these changes.
+- [x] Published implementation commit `b52f099e8fce8df5e232f201b26082ca34919097` to `origin/main` and verified the remote commit ID. No new local automated tests were run; CI results have not been inspected for this publication.
 
 Backend reloaded successfully; the authenticated workflow list returned HTTP 200 and confirmed the disabled draft and its 11:00 trigger. The scheduler is online; the daily workflow is now enabled. Next due 2026-10-16 at 11:00 Asia/Kolkata.
 
@@ -131,7 +131,8 @@ Current implementation assessment on 2026-10-15; this separates new development 
 - [ ] Improve local-model responsiveness and long-job progress/status. A corrected CPU greeting took 69 seconds; report generation takes minutes.
 - [ ] Add reliable Windows runtime startup/restart and operational alerts. Current operation depends on manually started services and an awake PC; a reboot is not a confirmed recovery path.
 - [ ] Resolve the production inference topology before AWS release. The PC's Ollama loopback endpoint is unreachable from an AWS backend; choose a server-side inference configuration or an explicitly selected hosted provider.
-- [ ] Run regression checks for the changed provider/research/companion code when requested, then commit and publish the local changes to GitHub.
+- [ ] Run regression checks for the changed provider/research/companion code when requested.
+- [x] Commit and publish the provider/research/companion updates to GitHub (`b52f099`); remote commit verified.
 
 ### Existing code that still needs setup or live acceptance
 
@@ -170,6 +171,8 @@ Known v1 limits: one app host; manual handling of MFA/CAPTCHAs and uncertain act
 Storyboard, editable scenes, local asset credits and share caption are saved under `brag-output/`. The film is local; no video has been published.
 
 ## Progress log
+
+- 2026-10-15: At the user's request, committed and pushed the local Ollama, project-research, browser, voice and documentation changes to main as `b52f099e8fce8df5e232f201b26082ca34919097`. Verified GitHub refs/heads/main matches the implementation commit. Scanned 90 tracked/new text files against configured credential values and credential-like patterns with no findings; .env, local databases, reports and logs remain ignored. No new local automated test suite was run. This follow-up documentation-only publication record skips duplicate CI; the implementation push uses the existing CI workflow.
 
 - 2026-10-15: Reviewed current implementation status on user request. Confirmed daily workflow enabled with next due 2026-10-16 11:00 Asia/Kolkata, fresh scheduler heartbeat, Ollama selected, Calendar OAuth unconfigured/unconnected, and Telegram webhook unregistered. Added a development-versus-setup backlog and corrected stale checklist entries about Docker, local model use, delivery and workflow activation. No application code changes or tests were performed in this status review.
 

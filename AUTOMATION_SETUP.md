@@ -86,4 +86,4 @@ The first requested preview stopped on Gemini HTTP 429 (quota/rate limit); no pr
 
 Docker Desktop failed during inference-socket initialization, so Redis and Celery scheduling have not come online. The local backend/dashboard can still show the draft. Keep the backend, Redis, worker and one Beat scheduler running on an awake PC, or deploy them to the planned always-on host, for daily operation. Incoming Telegram webhooks are not required for outbound PDF delivery.
 
-The current report-planning changes are local and have not been covered by a new automated test run or published to GitHub.
+The report-planning/provider changes were published in implementation commit b52f099. No new local automated test suite was run for this publication; its CI results have not been inspected.

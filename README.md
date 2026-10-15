@@ -82,7 +82,7 @@ Registered workflow tools:
 | Tool | Arguments |
 |---|---|
 | `notify` | `message` |
-| `research.run` | `topic`, optional `include_academic` |
+| `research.run` | `topic`, optional `include_academic`, `report_kind` (`standard` or `project_ideas`) |
 | `calendar.create` | `summary`, `start`, `end`, optional `description`, `location` |
 | `calendar.update` | Same event fields plus `event_id` |
 | `file.list`, `file.read`, `file.delete` | Absolute `path` |
