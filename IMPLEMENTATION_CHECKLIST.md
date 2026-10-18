@@ -8,7 +8,7 @@ The local app, dashboard, native voice window and private local chat are impleme
 
 **Open:** the **Derek** desktop shortcut, `Derek.vbs`, or [the local workspace](http://127.0.0.1:8000/). Sign in as **Kridey** with your existing password. Startup at Windows sign-in is enabled and can be changed in Settings. Closing the workspace leaves the tray running. The laptop must stay awake for local schedules and Telegram access.
 
-**Evidence rules:** checked implementation items mean the code exists. The dated evidence below distinguishes builds, startup observations and actual completed work from live acceptance. On the subsequent explicit request to check, test and publish, the automated suite was expanded: 116 Python tests and 8 dashboard tests pass. Production-code line coverage is 49%, so this is not exhaustive acceptance. Static, schema, dependency and infrastructure checks passed. GitHub publication/CI results are recorded below after the push.
+**Evidence rules:** checked implementation items mean the code exists. The dated evidence below distinguishes builds, startup observations and actual completed work from live acceptance. On the subsequent explicit request to check, test and publish, the automated suite was expanded: 116 Python tests and 8 dashboard tests pass. Production-code line coverage is 49%, so this is not exhaustive acceptance. Static, schema, dependency and infrastructure checks passed. The expansion is published on `main`; GitHub CI passed on Windows, Linux/PostgreSQL, the dashboard and Terraform. Publication evidence is recorded below.
 
 Guides: [Local app](LOCAL_APP.md) · [Voice](VOICE_SETUP.md) · [Private local chat](PRIVATE_CHAT.md) · [Automations](AUTOMATION_SETUP.md) · [Phone](PHONE_SETUP.md) · [Architecture/debate](DEREK_ALWAYS_ON_PLAN.md). Earlier records and publication evidence are preserved in [IMPLEMENTATION_HISTORY.md](IMPLEMENTATION_HISTORY.md).
 
@@ -75,7 +75,7 @@ Guides: [Local app](LOCAL_APP.md) · [Voice](VOICE_SETUP.md) · [Private local c
 | Automated regression | 116 Python tests and 8 dashboard tests pass, including exact confirmations, cancellation, request/form retries, worker lanes, signed Telegram buttons, simulated voice controls/VAD, private chat and local-model boundaries. Test accounts/database/media are isolated; live services are not called |
 | Live acceptance | Microphone/playback, real Calendar/Telegram conversations, lock/sleep/reboot and full browser/file workflow acceptance remain open |
 | Follow-up report, 2026-10-19 | Report `fa72bc44-2f70-4cda-96ac-078ada8c0520` completed: five proposals, two shortlisted plans, six unverified findings, PDF/DOCX files. Five PDF pages visually reviewed. The new file-delivery queue resumed after the graceful restart and Telegram returned success; recipient confirmation is separate |
-| Publication / hosting / phone | Publication requested after checks; remote result will be recorded. No AWS provisioning, phone call or forwarding change |
+| Publication / hosting / phone | Published to `Nagaram-Kridey/Derek-AI` on `main`; verified code commit `8017226`. All four [GitHub CI jobs](https://github.com/Nagaram-Kridey/Derek-AI/actions/runs/39164712178) passed. No AWS provisioning, phone call or forwarding change |
 
 ## Daily enterprise software and AI research
 
@@ -110,7 +110,7 @@ Workflow ID: `a7401ae6-1640-4864-a8fc-bc9e38c42dd4`. Do not create a duplicate r
 - [ ] **Browser/file tasks:** approve actual folders/sites and complete manual sign-in/MFA/CAPTCHA in Derek's separate profile. Pairing and prior YouTube navigation already have evidence.
 - [ ] **Cloud while laptop sleeps:** hosting/model budget, AWS access, domain/HTTPS and production consent, then one-scheduler/one-Telegram-receiver cutover, backup and monitoring acceptance.
 - [ ] **Phone:** confirm Airtel forwarding/destination support, gateway eligibility and total cost for the Samsung Galaxy A32 4G number before provisioning. No phone route is configured.
-- [ ] **GitHub publication:** requested on 2026-10-19; local verification passed. Push and remote CI results are being recorded.
+- [x] **GitHub publication:** published on 2026-10-19. Local tests passed; code commit `8017226` passed Windows, Linux/PostgreSQL, dashboard and infrastructure [CI](https://github.com/Nagaram-Kridey/Derek-AI/actions/runs/39164712178). A documentation-only follow-up records this result.
 
 ## What you need to do now
 
@@ -119,6 +119,8 @@ Workflow ID: `a7401ae6-1640-4864-a8fc-bc9e38c42dd4`. Do not create a duplicate r
 Cloud access while asleep, Calendar consent, manual website sign-in and the Airtel phone route still need your participation. Purchases, payments, account-security changes and permanent deletion keep their approval gates. The local app exposes no arbitrary shell or script execution.
 
 ## Progress log
+
+- **2026-10-19 — publication verified:** Published the implementation as `6f79d45`, then fixed the clean-runner development dependency as `8017226`. Confirmed remote `main` matches the code commit and all four [GitHub CI jobs](https://github.com/Nagaram-Kridey/Derek-AI/actions/runs/39164712178) passed. Read-only local smoke checks returned 200 for the workspace/health/built assets, 401 for an unauthenticated API request, and 200 for the existing owner session with private/no-store caching. The 121-file staged credential/local-artifact scan had no findings. This documentation-only follow-up records the result without rerunning unchanged application code.
 
 - **2026-10-19 — verification/publication request:** Added isolated test settings, blocked unmocked network/account access and native credential changes during tests, updated earlier tests for the reviewed-action/strict-sender contracts, and expanded regression coverage to 116 Python plus 8 dashboard tests. Fixed cancellation before provider setup, transaction-aware connection cleanup, API path normalization checks and Docker exclusions for local state/database journals. TypeScript/Vite, Ruff, Django/schema, pip/npm, Terraform and Compose checks passed. Added Linux/PostgreSQL and Windows CI coverage. Full results and remaining boundaries: [RELEASE_CHECK.md](RELEASE_CHECK.md).
 

@@ -15,10 +15,12 @@ Date: **2026-10-19 · Asia/Kolkata**. Requested scope: review the local assistan
 | Dashboard dependency audit | `npm audit`: zero known vulnerabilities, including development dependencies |
 | Terraform | `validate` passed using the installed provider cache; no deployment |
 | Local / production Compose | Configuration validation passed; no containers started |
-| Credential scan | Candidate tracked/unignored files checked against configured sensitive values and common private-key/API-token patterns; no matches. A staged scan is repeated before commit |
+| Credential scan | Staged scan checked 121 changed text files against 9 configured sensitive values and common private-key/API-token patterns; no matches. Local config, database, reports, runtime files and logs are excluded |
+| Local read-only HTTP smoke | Workspace, health and built assets: 200. Unauthenticated API: 401. Existing owner session: 200; private/no-store caching and dashboard CSP present |
+| GitHub CI | Windows, Linux/PostgreSQL, dashboard tests/build and Terraform jobs all passed |
 | Production-code line coverage | **49%** (3,094 / 6,301 lines). Tests are excluded from this percentage; coverage is not exhaustive |
 
-The Docker engine is not running on this laptop, so PostgreSQL/container execution was not performed locally. GitHub CI is configured for Linux/PostgreSQL, Windows, dashboard tests/build and Terraform validation. Its remote result is recorded after publication.
+The Docker engine is not running on this laptop, so PostgreSQL/container execution was not performed locally. GitHub CI is configured for Linux/PostgreSQL, Windows, dashboard tests/build and Terraform validation. Its remote result is now confirmed: all four jobs [passed](https://github.com/Nagaram-Kridey/Derek-AI/actions/runs/39164712178).
 
 ## Added regression coverage
 
@@ -46,4 +48,10 @@ The Docker engine is not running on this laptop, so PostgreSQL/container executi
 
 These are isolated automated checks and operational review, not a certification of production readiness. Live microphone/speakers, account-authorized Calendar changes, incoming Telegram conversation/voice, full signed-in browser workflows, Windows lock/sleep/reboot, crash injection and off-device restore remain acceptance work. No paid model probes, test Telegram messages, phone changes or cloud deployment were performed for this verification.
 
-Publication status: local checks passed; implementation commit, remote SHA and GitHub CI outcome are recorded after pushing.
+## Publication
+
+- Repository: [Nagaram-Kridey/Derek-AI](https://github.com/Nagaram-Kridey/Derek-AI), branch `main`.
+- Main implementation commit: `6f79d45a18707591eb76bd98ebbd9c51ae8384a3`.
+- Verified code commit: `8017226332558b65718dbb5fcd1d531765bae40e`; this adds the development dependency required by clean CI runners.
+- [Final CI run](https://github.com/Nagaram-Kridey/Derek-AI/actions/runs/39164712178): Windows, Linux/PostgreSQL, dashboard and Terraform all passed. The initial run caught the missing `psutil` development dependency; it was fixed and the full workflow rerun.
+- This documentation-only follow-up records publication/CI evidence; application source is unchanged from the tested code commit.
