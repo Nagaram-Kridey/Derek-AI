@@ -130,22 +130,28 @@ def test_usage_budget_and_secret_export(client, user, settings):
 
 def test_missing_provider_returns_clear_status(client, settings):
     settings.GEMINI_API_KEY = ""
-    response = client.post("/v1/turn", {"text": "Hello"}, format="json")
-    assert response.status_code == 503 and "GEMINI_API_KEY" in response.data["detail"]
+    response = client.post("/v1/turn", {"text": "Explain distributed queues"}, format="json")
+    assert response.status_code == 200 and response.data["status"] == "failed"
+    assert "GEMINI_API_KEY" in response.data["reply_text"]
 
 def test_mocked_turn_dispatches_real_reminder(client, user):
     with patch("assistant.services.BudgetGateway") as Mock:
         Mock.return_value.chat.side_effect = [{"text": "", "tool_calls": [{"name": "schedule_task", "args": {"name": "Water", "kind": "reminder", "payload": {"message": "Water"}, "schedule": {"kind": "once", "at": (timezone.now()+timedelta(minutes=10)).isoformat()}}}]}, {"text": "Reminder scheduled", "tool_calls": []}]
         response = client.post("/v1/turn", {"text": "Remind me in 10 minutes"}, format="json")
-    assert response.status_code == 200 and response.data["reply_text"] == "Reminder scheduled"
+    assert response.status_code == 200 and response.data["status"] == "awaiting_confirmation"
+    assert m.ScheduledTask.objects.filter(user=user).count() == 0
+    proposal = response.data["action_proposals"][0]
+    confirmed = client.post(f"/v1/action-proposals/{proposal['id']}/confirm/", {"revision": proposal["revision"], "payload_digest": proposal["payload_digest"]}, format="json")
+    assert confirmed.status_code == 200 and confirmed.data["proposal"]["status"] == "confirmed"
     assert m.ScheduledTask.objects.filter(user=user).count() == 1
-    assert m.Message.objects.filter(conversation_id=response.data["conversation_id"]).count() == 3
+    assert m.Message.objects.filter(conversation_id=response.data["conversation_id"],role__in=["user","assistant"]).count() == 3
 
 def test_telegram_allowlist_and_update_dedup(client, settings, user):
     settings.TELEGRAM_WEBHOOK_SECRET = "a-secret"
     settings.TELEGRAM_CHAT_ID = "123"
+    settings.TELEGRAM_USER_ID = "123"
     api = APIClient()
-    payload = {"update_id": 10, "message": {"chat": {"id": 123}, "text": "Hello"}}
+    payload = {"update_id": 10, "message": {"chat": {"id": 123, "type": "private"}, "from": {"id":123, "is_bot":False}, "text": "Hello"}}
     assert api.post("/v1/telegram/webhook/", payload, format="json").status_code == 403
     api.credentials(HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN="a-secret")
     assert api.post("/v1/telegram/webhook/", payload, format="json").status_code == 200

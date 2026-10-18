@@ -16,7 +16,9 @@ export function safeHttpUrl(value?: string): string | undefined {
   try {
     const url = new URL(value);
     return ['https:', 'http:'].includes(url.protocol) ? url.href : undefined;
-  } catch { return undefined; }
+  } catch {
+    return undefined;
+  }
 }
 
 function readableError(data: unknown): string {
@@ -25,7 +27,9 @@ function readableError(data: unknown): string {
     const item = data as Record<string, unknown>;
     if (typeof item.detail === 'string') return item.detail;
     if (typeof item.error === 'string') return item.error;
-    return Object.entries(item).map(([field, value]) => `${field}: ${Array.isArray(value) ? value.join(', ') : JSON.stringify(value)}`).join(' · ');
+    return Object.entries(item)
+      .map(([field, value]) => `${field}: ${Array.isArray(value) ? value.join(', ') : JSON.stringify(value)}`)
+      .join(' · ');
   }
   return 'Request could not be completed.';
 }
@@ -48,19 +52,34 @@ export class Api {
 
   async fetch(path: string, options: RequestInit = {}): Promise<Response> {
     // Keep credentials confined to this API, even when report content contains URLs.
-    if (!path.startsWith('/v1/')) throw new Error('Invalid API path.');
+    if (
+      !path.startsWith('/v1/') ||
+      path.includes('\\') ||
+      !new URL(path, 'http://derek.local').pathname.startsWith('/v1/')
+    )
+      throw new Error('Invalid API path.');
     const headers = new Headers(options.headers);
     if (this.token) headers.set('Authorization', `Token ${this.token}`);
     if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
     let response: Response;
-    try { response = await fetch(`${this.base}${path}`, { ...options, headers, credentials: 'same-origin', redirect: 'error' }); }
-    catch (error) {
+    try {
+      response = await fetch(`${this.base}${path}`, {
+        ...options,
+        headers,
+        credentials: 'same-origin',
+        redirect: 'error',
+      });
+    } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') throw error;
       throw new Error('Cannot reach the assistant service. Check your connection and try again.');
     }
     if (!response.ok) {
       let detail: unknown;
-      try { detail = await response.json(); } catch { detail = `Request failed (${response.status}).`; }
+      try {
+        detail = await response.json();
+      } catch {
+        detail = `Request failed (${response.status}).`;
+      }
       if (response.status === 401 && this.token) this.onUnauthorized?.();
       throw new ApiError(readableError(detail), response.status);
     }
@@ -71,7 +90,9 @@ export class Api {
     return this.request<T>(path, { method: 'POST', body: JSON.stringify(data) });
   }
 
-  delete(path: string): Promise<void> { return this.request<void>(path, { method: 'DELETE' }); }
+  delete(path: string): Promise<void> {
+    return this.request<void>(path, { method: 'DELETE' });
+  }
 
   async download(path: string, filename: string): Promise<void> {
     const response = await this.fetch(path);

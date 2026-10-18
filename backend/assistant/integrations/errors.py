@@ -9,5 +9,9 @@ class ProviderError(RuntimeError):
     """A remote provider failed or returned an invalid response."""
 
 
+class RequestCancelled(RuntimeError):
+    """The owner cancelled this request; do not dispatch tools or change providers."""
+
+
 class UnsafeURLError(ValueError):
     """A research URL would cross the public-internet boundary."""

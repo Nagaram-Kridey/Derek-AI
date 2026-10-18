@@ -1,11 +1,12 @@
 """Local Ollama chat/tools and structured research; no cloud-model fallback."""
 
 import json
+import os
 from urllib.parse import urlsplit
 
 import httpx
 
-from .errors import ConfigError, ProviderError
+from .errors import ConfigError, ProviderError, RequestCancelled
 from .model_base import ResearchPlanningMixin, SYSTEM
 
 
@@ -22,7 +23,8 @@ class OllamaGateway(ResearchPlanningMixin):
         self.num_ctx = min(max(int(num_ctx), 4096), 32768)
         self.last_usage = {"input_tokens": 0, "output_tokens": 0}
 
-    def _request(self, messages, *, tools=None, schema=None, max_output_tokens=2048):
+    def _request(self, messages, *, tools=None, schema=None, max_output_tokens=2048, cancelled=None):
+        cancelled = cancelled or getattr(self, "cancelled", None)
         messages = [dict(message) for message in messages]
         if self.model.split("/")[-1].split(":")[0] == "qwen3":
             # Qwen's prompt switch complements the runtime's think=False flag.
@@ -32,29 +34,42 @@ class OllamaGateway(ResearchPlanningMixin):
                     break
         body = {"model": self.model, "messages": messages, "stream": False, "think": False,
                 "keep_alive": "5m", "options": {"temperature": 0 if schema else 0.2,
-                "num_ctx": self.num_ctx, "num_predict": min(max_output_tokens, 4096)}}
+                "num_ctx": self.num_ctx, "num_predict": min(max_output_tokens, 4096),
+                "num_thread": max(1, min(8, (os.cpu_count() or 4) - 2))}}
         if tools:
             body["tools"] = tools
         if schema is not None:
             body["format"] = schema
         self.last_usage = {"input_tokens": 0, "output_tokens": 0}
+        def validate_model(info):
+            if info.status_code == 404:
+                raise ConfigError("The selected Ollama model is not installed. Pull OLLAMA_MODEL on the service PC first.")
+            if not info.is_success:
+                raise ProviderError("Cannot inspect the selected Ollama model. Check its local server log.")
+            metadata = info.json()
+            if not isinstance(metadata, dict):
+                raise ValueError
+            if metadata.get("remote_model") or metadata.get("remote_host"):
+                raise ConfigError("This Ollama model delegates inference to a remote host. Select a downloaded local model.")
+            capabilities = metadata.get("capabilities")
+            if tools and isinstance(capabilities, list) and "tools" not in capabilities:
+                raise ConfigError("The selected local model does not support tool calling. Choose a tool-capable Ollama model.")
         try:
-            with httpx.Client(trust_env=False, follow_redirects=False,
-                              timeout=httpx.Timeout(self.timeout_seconds, connect=5)) as client:
-                info = client.post(self.base_url + "/api/show", json={"model": self.model})
-                if info.status_code == 404:
-                    raise ConfigError("The selected Ollama model is not installed. Pull OLLAMA_MODEL on the service PC first.")
-                if not info.is_success:
-                    raise ProviderError("Cannot inspect the selected Ollama model. Check its local server log.")
-                metadata = info.json()
-                if not isinstance(metadata, dict):
-                    raise ValueError
-                if metadata.get("remote_model") or metadata.get("remote_host"):
-                    raise ConfigError("This Ollama model delegates inference to a remote host. Select a downloaded local model.")
-                capabilities = metadata.get("capabilities")
-                if tools and isinstance(capabilities, list) and "tools" not in capabilities:
-                    raise ConfigError("The selected local model does not support tool calling. Choose a tool-capable Ollama model.")
-                response = client.post(self.base_url + "/api/chat", json=body)
+            if cancelled:
+                from .cancellation import cancellable_request
+                async def generate():
+                    async with httpx.AsyncClient(trust_env=False, follow_redirects=False,
+                                                 timeout=httpx.Timeout(self.timeout_seconds, connect=5)) as client:
+                        info = await client.post(self.base_url + "/api/show", json={"model": self.model}, timeout=30)
+                        validate_model(info)
+                        return await client.post(self.base_url + "/api/chat", json=body)
+                response = cancellable_request(generate, cancelled)
+            else:
+                with httpx.Client(trust_env=False, follow_redirects=False,
+                                  timeout=httpx.Timeout(self.timeout_seconds, connect=5)) as client:
+                    info = client.post(self.base_url + "/api/show", json={"model": self.model}, timeout=30)
+                    validate_model(info)
+                    response = client.post(self.base_url + "/api/chat", json=body)
             if response.status_code == 404:
                 raise ConfigError("The selected Ollama model is not installed. Pull OLLAMA_MODEL on the service PC first.")
             if response.status_code == 400:
@@ -91,7 +106,7 @@ class OllamaGateway(ResearchPlanningMixin):
         except (ValueError, TypeError, KeyError):
             raise ProviderError("Ollama returned an invalid response.") from None
 
-    def chat(self, messages, tools):
+    def chat(self, messages, tools, cancelled=None):
         if not messages or len(messages) > 100:
             raise ValueError("Provide between 1 and 100 chat messages.")
         history = [{"role": "system", "content": SYSTEM + "\nReturn only the final user-facing answer or a tool call. Keep replies concise."}]
@@ -107,7 +122,7 @@ class OllamaGateway(ResearchPlanningMixin):
                 raise ValueError("Unsupported chat role.")
             history.append({"role": role, "content": content})
         declarations = [{"type": "function", "function": item.get("function", item)} for item in tools[:32]]
-        result = self._request(history, tools=declarations, max_output_tokens=512)
+        result = self._request(history, tools=declarations, max_output_tokens=512, cancelled=cancelled)
         registered = {item["function"]["name"] for item in declarations}
         calls = []
         for item in (result.get("tool_calls") or [])[:8]:
@@ -135,11 +150,17 @@ class OllamaGateway(ResearchPlanningMixin):
         except (ValueError, TypeError):
             raise ProviderError("The local model returned invalid structured output. Try a model with stronger JSON schema support.") from None
 
-    def grounded_search(self, query):
+    def grounded_search(self, query, cancelled=None):
+        cancelled = cancelled or getattr(self, "cancelled", None)
         # Compatibility interface: search snippets are NOT Google-grounded prose.
         from .web_search import public_search
         self.last_usage = {"input_tokens": 0, "output_tokens": 0}
-        return public_search(query)
+        if cancelled and cancelled():
+            raise RequestCancelled("Command cancelled.")
+        result = public_search(query)
+        if cancelled and cancelled():
+            raise RequestCancelled("Command cancelled.")
+        return result
 
     def plan_research(self, topic):
         # Bound CPU work: one focused search, up to six public result pages.

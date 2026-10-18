@@ -162,13 +162,16 @@ def _evidence_window(text, claim, maximum=7000):
     return text[start:start + maximum]
 
 
-def run_research(topic: str, gateway, include_academic=True) -> dict:
+def run_research(topic: str, gateway, include_academic=True, progress=None) -> dict:
     from .model_base import _topic
 
     topic = _topic(topic)
+    report_progress = progress or (lambda *args, **kwargs: None)
+    report_progress("planning", "Planning focused research questions")
     queries = gateway.plan_research(topic)[:3]
     sources, claims, errors, search_suggestions = {}, [], [], []
-    for query in queries:
+    for index, query in enumerate(queries):
+        report_progress("searching", "Gathering public sources", current=index + 1, total=len(queries))
         result = gateway.grounded_search(query)
         if result.get("search_suggestions_html"):
             search_suggestions.append(result["search_suggestions_html"])
@@ -180,6 +183,7 @@ def run_research(topic: str, gateway, include_academic=True) -> dict:
                 if claim["text"] not in {c["text"] for c in claims}:
                     claims.append({"text": claim["text"][:3000], "source_urls": list(dict.fromkeys(u for u in claim.get("source_urls", []) if isinstance(u, str)))[:8]})
     if include_academic:
+        report_progress("academic", "Looking for academic sources")
         try:
             for paper in academic_search(topic):
                 if len(sources) < MAX_SOURCES:
@@ -190,7 +194,8 @@ def run_research(topic: str, gateway, include_academic=True) -> dict:
             errors.append(str(exc))
 
     fetched = {}
-    for url, source in sources.items():
+    for index, (url, source) in enumerate(sources.items()):
+        report_progress("checking_sources", "Retrieving source evidence", current=index + 1, total=len(sources))
         try:
             evidence = safe_fetch(url)
             fetched[url] = evidence
@@ -200,7 +205,8 @@ def run_research(topic: str, gateway, include_academic=True) -> dict:
             source.update({"reachable": False, "error": "Source blocked by public-network policy." if isinstance(exc, UnsafeURLError) else "Source could not be independently retrieved."})
 
     findings = []
-    for claim in claims:
+    for index, claim in enumerate(claims):
+        report_progress("verifying", "Checking claims against independent domains", current=index + 1, total=len(claims))
         known_urls = [url for url in claim["source_urls"] if url in sources]
         evidence = [{"url": url, "text": _evidence_window(fetched[url]["text"], claim["text"])} for url in known_urls if url in fetched]
         judgments = []
@@ -230,6 +236,7 @@ def run_research(topic: str, gateway, include_academic=True) -> dict:
                          "verification_status": "verified" if verified else "unverified",
                          "supporting_source_urls": list(dict.fromkeys(supporting)), "evidence": excerpts,
                          "verification_reason": "Supporting evidence from two independent domains." if verified else "Fewer than two independent domains supplied supporting evidence."})
+    report_progress("writing", "Writing the report with evidence labels")
     written = gateway.write_report(topic, findings)
     # Only our verifier's findings/citations are returned; the writer cannot
     # replace them with invented items, source links, or verification statuses.

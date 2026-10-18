@@ -21,6 +21,14 @@ class Config:
     whisper_model: str = "base.en"
     browser_channel: str = "chromium"
     turn_timeout_seconds: int = 120
+    voice_silence_ms: int = 900
+    voice_idle_seconds: int = 30
+    voice_session_seconds: int = 300
+    voice_max_utterance_seconds: int = 120
+    voice_vad_mode: int = 2
+    voice_barge_in: bool = False
+    voice_input_device: str | None = None
+    voice_output_device: str | None = None
 
     @property
     def browser_profile(self):
@@ -45,4 +53,24 @@ class Config:
         if browser_channel not in {"chromium", "chrome", "msedge"}:
             raise ValueError("LILYLEO_BROWSER_CHANNEL must be chromium, chrome, or msedge.")
         default_state = Path(os.getenv("LOCALAPPDATA", str(Path.home() / ".local" / "share"))) / "LilyLeo"
-        return cls(api, os.getenv("LILYLEO_DEVICE_TOKEN", ""), os.getenv("LILYLEO_USER_TOKEN", ""), Path(os.getenv("LILYLEO_STATE_DIR", str(default_state))).expanduser().resolve(), max(1, float(os.getenv("LILYLEO_POLL_SECONDS", "5"))), local, os.getenv("CARTESIA_API_KEY", ""), os.getenv("CARTESIA_VOICE_ID", ""), os.getenv("CARTESIA_MODEL", "sonic-3.6"), os.getenv("CARTESIA_API_VERSION", "2026-08-14"), os.getenv("WHISPER_MODEL", "base.en"), browser_channel, min(1800, max(30, int(os.getenv("LILYLEO_TURN_TIMEOUT_SECONDS", "120")))))
+        token = os.getenv("LILYLEO_USER_TOKEN", "")
+        try:
+            from desktop.credentials import read_owner_token
+            token = read_owner_token(api) or token
+        except ImportError:
+            pass
+        return cls(api_url=api, device_token=os.getenv("LILYLEO_DEVICE_TOKEN", ""), user_token=token,
+                   state_dir=Path(os.getenv("LILYLEO_STATE_DIR", str(default_state))).expanduser().resolve(),
+                   poll_seconds=max(1, float(os.getenv("LILYLEO_POLL_SECONDS", "5"))), allow_local_http=local,
+                   cartesia_key=os.getenv("CARTESIA_API_KEY", ""), cartesia_voice=os.getenv("CARTESIA_VOICE_ID", ""),
+                   cartesia_model=os.getenv("CARTESIA_MODEL", "sonic-3.6"), cartesia_version=os.getenv("CARTESIA_API_VERSION", "2026-08-14"),
+                   whisper_model=os.getenv("WHISPER_MODEL", "base.en"), browser_channel=browser_channel,
+                   turn_timeout_seconds=min(1800, max(30, int(os.getenv("LILYLEO_TURN_TIMEOUT_SECONDS", "120")))),
+                   voice_silence_ms=min(3000, max(450, int(os.getenv("DEREK_VOICE_SILENCE_MS", "900")))),
+                   voice_idle_seconds=min(120, max(10, int(os.getenv("DEREK_VOICE_IDLE_SECONDS", "30")))),
+                   voice_session_seconds=min(1800, max(60, int(os.getenv("DEREK_VOICE_SESSION_SECONDS", "300")))),
+                   voice_max_utterance_seconds=min(120, max(5, int(os.getenv("DEREK_VOICE_MAX_UTTERANCE_SECONDS", "120")))),
+                   voice_vad_mode=min(3, max(0, int(os.getenv("DEREK_VOICE_VAD_MODE", "2")))),
+                   voice_barge_in=os.getenv("DEREK_VOICE_BARGE_IN", "false").lower() == "true",
+                   voice_input_device=os.getenv("DEREK_VOICE_INPUT_DEVICE") or None,
+                   voice_output_device=os.getenv("DEREK_VOICE_OUTPUT_DEVICE") or None)

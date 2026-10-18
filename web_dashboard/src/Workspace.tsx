@@ -1,31 +1,320 @@
 import { useState } from 'react';
 import { Api, errorMessage, safeHttpUrl } from './api';
-import type { Audit, CalendarEvent, Device, Report, SystemStatus } from './types';
-import { Badge, Empty, ErrorNotice, Icon, JsonDetails, Loading, dateLabel, useResource } from './ui';
+import type { CalendarEvent, Device, SystemStatus } from './types';
+import { Badge, ErrorNotice, Icon, JsonDetails, dateLabel, useResource } from './ui';
 
-export function Reports({api, refresh}: {api:Api;refresh:number}) {
-  const reports = useResource<Report[]>(api, '/v1/reports/', refresh);
-  const [error,setError] = useState<string|null>(null); const [busy,setBusy] = useState(false);
-  async function download(id:string|number,format:string) {setBusy(true);setError(null);try{await api.download(`/v1/reports/${id}/download/?format=${format}`,`Derek-${id}.${format}`);}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
-  async function remove(id:string|number) {if(!window.confirm('Permanently delete this report and both exported files?'))return;setBusy(true);try{await api.delete(`/v1/reports/${id}/`);reports.setData(prev=>prev?.filter(r=>r.id!==id)||[]);}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
-  return <div className="stack"><div className="section-heading"><div><h2>Your research library</h2><p className="muted">Sources, findings and the next steps worth considering.</p></div><Icon name="file" size={32}/></div><ErrorNotice message={error||reports.error}/>{reports.loading&&!reports.data?<Loading/>:reports.data?.length?<div className="card-grid">{reports.data.map(report=><article className="card" key={report.id}><Badge status={report.status}/><h3>{report.title}</h3><p className="muted">{dateLabel(report.created_at)}</p><p className="report-summary">{report.summary}</p><div className="sources">{report.citations?.map((source,i)=>safeHttpUrl(source.url)?<a key={i} href={safeHttpUrl(source.url)} target="_blank" rel="noopener noreferrer">{source.title||source.url}</a>:null)}</div><div className="actions">{['pdf','docx'].map(format=><button className="button secondary small" key={format} disabled={busy||report.status!=='completed'} onClick={()=>download(report.id,format)}><Icon name="download" size={14}/>{format.toUpperCase()}</button>)}<button className="text-button" disabled={busy||report.status==='running'} onClick={()=>remove(report.id)}>Delete</button></div></article>)}</div>:<Empty icon="file" title="A place for your discoveries">Ask Derek to research a topic. Finished reports will appear here.</Empty>}</div>;
-}
-
-export function Activity({api,refresh}: {api:Api;refresh:number;changed:()=>void}) {
-  const audit = useResource<Audit[]>(api,'/v1/audit/',refresh);
-  const notifications = useResource<{id:string;text:string;status:string;created_at:string}[]>(api,'/v1/notifications/',refresh);
-  return <div className="stack"><section className="panel"><h2>Notifications</h2><ErrorNotice message={notifications.error}/>{notifications.data?.length?notifications.data.map(row=><div className="list-row" key={row.id}><div><p>{row.text}</p><small>{dateLabel(row.created_at)}</small></div><Badge status={row.status}/></div>):<p className="muted">Reminders and report updates will appear here.</p>}</section><section className="panel"><h2>Execution history</h2><ErrorNotice message={audit.error}/>{audit.loading&&!audit.data?<Loading/>:audit.data?.length?audit.data.map(row=><div className="list-row" key={row.id}><div><strong>{row.action.replaceAll('.',' · ')}</strong><p className="muted">{dateLabel(row.created_at)}</p><JsonDetails value={row.details||row.metadata}/></div><Icon name="activity" size={18}/></div>):<Empty icon="activity" title="Your activity will show here">See what ran, what finished and what needs your attention.</Empty>}</section></div>;
-}
-
-export function Settings({api,refresh,changed,status}:{api:Api;refresh:number;changed:()=>void;status:SystemStatus|null}) {
-  const devices=useResource<Device[]>(api,'/v1/devices/',refresh);
-  const [error,setError]=useState<string|null>(null); const [busy,setBusy]=useState(false);const [credential,setCredential]=useState('');const [name,setName]=useState('Windows companion');
-  const [events,setEvents]=useState<CalendarEvent[]>([]);
-  const [showVoiceToken,setShowVoiceToken]=useState(false);
-  async function perform(action:()=>Promise<unknown>) {setBusy(true);setError(null);try{await action();changed();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
-  function integrationReady(value: unknown) {if(typeof value==='boolean')return value;if(value&&typeof value==='object')return (value as {connected?:boolean;configured?:boolean}).connected??(value as {configured?:boolean}).configured;return false;}
-  return <div className="stack"><ErrorNotice message={error||devices.error}/><section className="panel"><div className="section-heading"><div><h2>Automation controls</h2><p className="muted">Pausing prevents new actions. A request already sent to another service may finish.</p></div><button className="button primary" disabled={busy||!status} onClick={()=>perform(()=>api.post('/v1/control/pause/',{paused:!status?.paused}))}><Icon name={status?.paused?'play':'pause'}/>{status?.paused?'Resume automations':'Pause all'}</button></div><p className="muted">Scheduler: {status?.scheduler_online ? 'online' : 'offline — start the Celery worker and Beat for background jobs'}</p><JsonDetails value={status?.usage} label="Daily usage and configured limits"/></section>
-  <section className="panel"><h2>Connections</h2>{status?.language_model && <p className="muted">Selected model: {status.language_model.model} ({status.language_model.provider}). Search: {status.language_model.web_search}. Local generation requires Ollama and enough free RAM on the service PC.</p>}<div className="card-grid">{Object.entries(status?.integrations||{}).map(([key,value])=><div className="connection-tile" key={key}><strong>{key==='gemini'?'Gemini':key==='ollama'?'Ollama (local)':key==='cartesia'?'Speech':key==='calendar'?'Google Calendar':'Telegram'}</strong><Badge status={integrationReady(value)?(key==='calendar'?'connected':'configured'):'setup needed'}/></div>)}</div><p className="muted">API keys are configured on the service host. Connect your Calendar account here after OAuth has been configured.</p><div className="actions"><button className="button secondary" disabled={busy} onClick={()=>perform(async()=>{const result=await api.post<{url:string}>('/v1/calendar/connect/');const url=safeHttpUrl(result.url);if(!url)throw new Error('Invalid authorization URL');window.location.assign(url);})}>Connect Google Calendar</button><button className="button secondary" disabled={busy} onClick={()=>perform(async()=>{const data=await api.request<CalendarEvent[]>('/v1/calendar/events/');setEvents(data);})}>Upcoming events</button><button className="text-button" disabled={busy} onClick={()=>perform(()=>api.delete('/v1/calendar/events/'))}>Disconnect Calendar</button></div>{events.map(event=><div className="list-row" key={event.id}><strong>{event.summary||'Untitled event'}</strong><span>{dateLabel(event.start?.dateTime||event.start?.date)}</span></div>)}</section>
-  <section className="panel"><h2>Desktop companion</h2><p className="muted">Pair your Windows computer. The device credential is displayed once. Put it in the companion environment configuration.</p><form onSubmit={e=>{e.preventDefault();void perform(async()=>{const device=await api.post<Device>('/v1/devices/',{name});setCredential(device.credential||'');});}} className="pair-form"><label>Device name<input value={name} onChange={e=>setName(e.target.value)} required/></label><button className="button secondary" disabled={busy}>Pair device</button></form>{credential&&<div className="notice warning"><p>Copy this credential now:</p><code className="credential">{credential}</code><button className="text-button" onClick={()=>setCredential('')}>Hide credential</button></div>}{devices.data?.map(device=><div className="list-row" key={device.id}><div><strong>{device.name}</strong><p className="muted">Last seen {dateLabel(device.last_seen_at)}</p></div><button className="text-button" disabled={busy} onClick={()=>{if(window.confirm('Revoke this device credential?'))void perform(()=>api.delete(`/v1/devices/${device.id}/`));}}>Revoke</button></div>)}</section>
-  <section className="panel"><h2>Desktop voice access</h2><p className="muted">The voice client uses your session token to send transcripts. Keep it private; signing out invalidates it.</p><button className="button secondary" onClick={()=>setShowVoiceToken(!showVoiceToken)}>{showVoiceToken?'Hide token':'Show voice token'}</button>{showVoiceToken&&<code className="credential">{api.token}</code>}</section><section className="panel"><h2>Your data</h2><p className="muted">History stays until you delete it. Individual tasks, workflows and reports can be deleted from their pages.</p><div className="actions"><button className="button secondary" disabled={busy} onClick={()=>perform(()=>api.download('/v1/export/','derek-export.json'))}>Export my data</button><button className="button danger" disabled={busy} onClick={()=>{if(window.confirm('Permanently delete all conversation history?'))void perform(()=>api.delete('/v1/history/'));}}>Delete conversation history</button></div></section></div>;
+export function Settings({
+  api,
+  refresh,
+  changed,
+  status,
+}: {
+  api: Api;
+  refresh: number;
+  changed: () => void;
+  status: SystemStatus | null;
+}) {
+  const devices = useResource<Device[]>(api, '/v1/devices/', refresh);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [credential, setCredential] = useState('');
+  const [name, setName] = useState('Windows companion');
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [showVoiceToken, setShowVoiceToken] = useState(false);
+  async function perform(action: () => Promise<unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      changed();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  function integrationReady(value: unknown) {
+    if (typeof value === 'boolean') return value;
+    if (value && typeof value === 'object')
+      return (
+        (value as { connected?: boolean; configured?: boolean }).connected ??
+        (value as { configured?: boolean }).configured
+      );
+    return false;
+  }
+  return (
+    <div className="stack">
+      <ErrorNotice message={error || devices.error} />
+      {status?.runtime?.managed && (
+        <section className="panel">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">ON THIS LAPTOP</span>
+              <h2>Your local app</h2>
+            </div>
+            <Badge status="running locally" />
+          </div>
+          <p className="muted">{status.runtime.note}</p>
+          <div className="list-row">
+            <div>
+              <strong>Start at Windows sign-in</strong>
+              <p className="muted">Start quietly in the tray. Voice stays muted until you choose Listen.</p>
+            </div>
+            <button
+              className="button secondary small"
+              disabled={busy || status.runtime.start_at_login === undefined}
+              onClick={() =>
+                perform(() => api.post('/v1/local/startup/', { enabled: !status.runtime?.start_at_login }))
+              }
+            >
+              {status.runtime.start_at_login === undefined
+                ? 'Checking…'
+                : status.runtime.start_at_login
+                  ? 'Turn off'
+                  : 'Turn on'}
+            </button>
+          </div>
+          <div className="list-row">
+            <div>
+              <strong>Voice shortcut</strong>
+              <p className="muted">
+                {status.runtime.voice_shortcut
+                  ? `${status.runtime.voice_shortcut} opens or focuses the voice window. Choose Listen to arm capture.`
+                  : 'Open voice from the tray. The shortcut may be in use by another application.'}
+              </p>
+            </div>
+            <div className="actions">
+              <button
+                className="button secondary small"
+                disabled={busy}
+                onClick={() => perform(() => api.post('/v1/local/voice/', { mode: 'online' }))}
+              >
+                Open voice
+              </button>
+              <button
+                className="button secondary small"
+                disabled={busy}
+                onClick={() => perform(() => api.post('/v1/local/voice/', { mode: 'private' }))}
+              >
+                Private voice
+              </button>
+            </div>
+          </div>
+          <div className="list-row">
+            <div>
+              <strong>Local database snapshot</strong>
+              <p className="muted">
+                {status.runtime.backup?.created_at
+                  ? `${dateLabel(status.runtime.backup.created_at)} · ${status.runtime.backup.encrypted ? 'Encrypted with your existing credential key' : 'Local file copy'}`
+                  : 'The launcher will create a snapshot shortly.'}
+              </p>
+              <small>
+                Normal assistant database only; report files and private local chat are separate. This is not
+                an off-device backup.
+              </small>
+              {status.runtime.backup?.reason && <p className="error-text">{status.runtime.backup.reason}</p>}
+            </div>
+            <Badge status={status.runtime.backup?.status || 'pending'} />
+          </div>
+        </section>
+      )}
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <h2>Automation controls</h2>
+            <p className="muted">
+              Pausing prevents new actions. A request already sent to another service may finish.
+            </p>
+          </div>
+          <button
+            className="button primary"
+            disabled={busy || !status}
+            onClick={() => perform(() => api.post('/v1/control/pause/', { paused: !status?.paused }))}
+          >
+            <Icon name={status?.paused ? 'play' : 'pause'} />
+            {status?.paused ? 'Resume automations' : 'Pause all'}
+          </button>
+        </div>
+        <p className="muted">
+          Scheduler:{' '}
+          {status?.scheduler_online
+            ? 'online'
+            : status?.runtime?.managed
+              ? 'waiting for the local scheduler to recover'
+              : 'offline — start the worker and scheduler for background jobs'}
+        </p>
+        <JsonDetails value={status?.usage} label="Daily usage and configured limits" />
+      </section>
+      <section className="panel">
+        <h2>Connections</h2>
+        {status?.language_model && (
+          <p className="muted">
+            Background / installation model: {status.language_model.model} ({status.language_model.provider}).
+            Search: {status.language_model.web_search}. Choose the model for new conversations on the Features
+            page. Local generation requires Ollama and enough free RAM on the service PC.
+          </p>
+        )}
+        <div className="card-grid">
+          {Object.entries(status?.integrations || {}).map(([key, value]) => (
+            <div className="connection-tile" key={key}>
+              <strong>
+                {key === 'gemini'
+                  ? 'Gemini'
+                  : key === 'ollama'
+                    ? 'Ollama (local)'
+                    : key === 'cartesia'
+                      ? 'Speech'
+                      : key === 'calendar'
+                        ? 'Google Calendar'
+                        : 'Telegram'}
+              </strong>
+              <Badge
+                status={
+                  integrationReady(value) ? (key === 'calendar' ? 'connected' : 'configured') : 'setup needed'
+                }
+              />
+            </div>
+          ))}
+        </div>
+        <p className="muted">
+          API keys are configured on the service host. Connect your Calendar account here after OAuth has been
+          configured.
+        </p>
+        <div className="actions">
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={() =>
+              perform(async () => {
+                const result = await api.post<{ url: string }>('/v1/calendar/connect/');
+                const url = safeHttpUrl(result.url);
+                if (!url) throw new Error('Invalid authorization URL');
+                window.location.assign(url);
+              })
+            }
+          >
+            Connect Google Calendar
+          </button>
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={() =>
+              perform(async () => {
+                const data = await api.request<CalendarEvent[]>('/v1/calendar/events/');
+                setEvents(data);
+              })
+            }
+          >
+            Upcoming events
+          </button>
+          <button
+            className="text-button"
+            disabled={busy}
+            onClick={() => perform(() => api.delete('/v1/calendar/events/'))}
+          >
+            Disconnect Calendar
+          </button>
+        </div>
+        {events.map((event) => (
+          <div className="list-row" key={event.id}>
+            <strong>{event.summary || 'Untitled event'}</strong>
+            <span>{dateLabel(event.start?.dateTime || event.start?.date)}</span>
+          </div>
+        ))}
+      </section>
+      <section className="panel">
+        <h2>Desktop companion</h2>
+        <p className="muted">
+          Pair your Windows computer. The device credential is displayed once. Put it in the companion
+          environment configuration.
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void perform(async () => {
+              const device = await api.post<Device>('/v1/devices/', { name });
+              setCredential(device.credential || '');
+            });
+          }}
+          className="pair-form"
+        >
+          <label>
+            Device name
+            <input value={name} onChange={(e) => setName(e.target.value)} required />
+          </label>
+          <button className="button secondary" disabled={busy}>
+            Pair device
+          </button>
+        </form>
+        {credential && (
+          <div className="notice warning">
+            <p>Copy this credential now:</p>
+            <code className="credential">{credential}</code>
+            <button className="text-button" onClick={() => setCredential('')}>
+              Hide credential
+            </button>
+          </div>
+        )}
+        {devices.data?.map((device) => (
+          <div className="list-row" key={device.id}>
+            <div>
+              <strong>{device.name}</strong>
+              <p className="muted">Last seen {dateLabel(device.last_seen_at)}</p>
+            </div>
+            <button
+              className="text-button"
+              disabled={busy}
+              onClick={() => {
+                if (window.confirm('Revoke this device credential?'))
+                  void perform(() => api.delete(`/v1/devices/${device.id}/`));
+              }}
+            >
+              Revoke
+            </button>
+          </div>
+        ))}
+      </section>
+      <section className="panel">
+        <h2>Desktop voice access</h2>
+        <p className="muted">
+          Signing in to the local app refreshes online voice access in Windows Credential Manager. Signing out
+          revokes that access until you sign in again. Private local voice uses Ollama without this account
+          token.
+        </p>
+        <p className="muted">
+          Advanced setup: reveal the token only when configuring a separate trusted client.
+        </p>
+        <button className="button secondary" onClick={() => setShowVoiceToken(!showVoiceToken)}>
+          {showVoiceToken ? 'Hide token' : 'Show voice token'}
+        </button>
+        {showVoiceToken && <code className="credential">{api.token}</code>}
+      </section>
+      <section className="panel">
+        <h2>Your data</h2>
+        <p className="muted">
+          History stays until you delete it. Individual tasks, workflows and reports can be deleted from their
+          pages.
+        </p>
+        <div className="actions">
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={() => perform(() => api.download('/v1/export/', 'derek-export.json'))}
+          >
+            Export my data
+          </button>
+          <button
+            className="button danger"
+            disabled={busy}
+            onClick={() => {
+              if (window.confirm('Permanently delete all conversation history?'))
+                void perform(() => api.delete('/v1/history/'));
+            }}
+          >
+            Delete conversation history
+          </button>
+        </div>
+      </section>
+    </div>
+  );
 }

@@ -17,6 +17,16 @@ from .errors import ConfigError, ProviderError
 MAX_VOICE_BYTES = 20_000_000
 
 
+class TelegramRateLimit(ProviderError):
+    def __init__(self, retry_after):
+        self.retry_after = min(max(int(retry_after), 1), 3600)
+        super().__init__("Telegram asked delivery to wait.")
+
+
+class TelegramConflict(ProviderError):
+    pass
+
+
 def _base(bot_token):
     if not bot_token:
         raise ConfigError("Set TELEGRAM_BOT_TOKEN to enable Telegram.")
@@ -31,6 +41,14 @@ def _call(bot_token, method, **kwargs):
     url = _base(bot_token) + "/" + method
     try:
         response = httpx.post(url, timeout=30, follow_redirects=False, **kwargs)
+        if response.status_code == 409:
+            raise TelegramConflict("Another Telegram receiver or webhook is active.")
+        if response.status_code == 429:
+            try:
+                delay = response.json().get("parameters", {}).get("retry_after", 5)
+                raise TelegramRateLimit(delay)
+            except (TypeError, ValueError):
+                raise TelegramRateLimit(5) from None
         response.raise_for_status()
         data = response.json()
         if data.get("ok") is not True:
@@ -46,13 +64,23 @@ def _chat_id(chat_id):
     return str(chat_id)
 
 
-def send_message(bot_token: str, chat_id, text: str):
+def send_message(bot_token: str, chat_id, text: str, reply_markup=None):
     if not isinstance(text, str) or not text.strip() or len(text) > 16000:
         raise ValueError("Telegram message must contain 1 to 16000 characters.")
     chat_id = _chat_id(chat_id)
     results = []
     for start in range(0, len(text), 4000):
-        results.append(_call(bot_token, "sendMessage", json={"chat_id": chat_id, "text": text[start:start + 4000], "link_preview_options": {"is_disabled": True}}))
+        body = {"chat_id": chat_id, "text": text[start:start + 4000], "link_preview_options": {"is_disabled": True}}
+        if reply_markup and start + 4000 >= len(text):
+            body["reply_markup"] = reply_markup
+        try:
+            results.append(_call(bot_token, "sendMessage", json=body))
+        except TelegramRateLimit:
+            if results:
+                # Some blocks were already accepted. Retrying the whole text
+                # would duplicate them; the caller must expose uncertainty.
+                raise ProviderError("Telegram accepted part of this reply. Check the chat before requesting another copy.") from None
+            raise
     return results
 
 

@@ -4,7 +4,37 @@ Source repository: [Nagaram-Kridey/Derek-AI](https://github.com/Nagaram-Kridey/D
 
 A personal assistant with a Django API, React dashboard, durable schedules and a Windows companion for approved file and browser workflows. Choose Gemini for hosted generation/Google grounding, or Ollama for local generation with separate public web search. Google Calendar, Telegram and Cartesia are optional connected services. See [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) for current implementation and verification status.
 
-## Start locally on Windows
+## Use the local Windows app
+
+On this laptop, open the **Derek** desktop shortcut or double-click `Derek.vbs`. The app lives at [127.0.0.1:8000](http://127.0.0.1:8000/) and stays running in the Windows tray after its window closes. Startup at Windows sign-in is enabled for Kridey's installation and can be changed in Settings or the tray menu. The laptop must remain awake for local routines and Telegram access.
+
+The managed local runtime serves the built dashboard with Waitress and runs separate database-backed conversation, research, delivery and scheduling processes. **It needs no Docker, Redis or running Vite server.** Do not run a second Celery/development stack against the same database. Full setup, startup/recovery commands and backup scope: [LOCAL_APP.md](LOCAL_APP.md).
+
+- **Today:** next routines, unread updates and current service health.
+- **Chat and Command history:** persistent conversations, explicit model choice, saved outcomes, stop/retrieve controls and exact confirmation cards.
+- **Automations:** reviewed workflows, editable reminders, selected weekdays and execution history.
+- **Reports:** progress, cancellation, readable evidence/project shortlists, PDF/DOCX downloads and explicit Telegram delivery copies.
+- **Voice:** Ctrl+Alt+Space opens the native voice window; choose Listen to arm the microphone. Settings also opens online or private voice. See [VOICE_SETUP.md](VOICE_SETUP.md).
+- **Private local chat:** tray action or `python -m companion private`; isolated Ollama history, no account tools or cloud synchronization. See [PRIVATE_CHAT.md](PRIVATE_CHAT.md).
+- **Telegram:** the local approved-private-chat poller receives messages without public HTTPS when no webhook is registered. It never removes an existing webhook.
+
+The application code and shortcut are installed locally; a signed standalone installer, wake word, cloud availability while the laptop sleeps and phone calling remain future work. New functionality has compilation/build and startup evidence; live microphone, incoming Telegram, confirmation and sleep/reboot acceptance remain pending. Check [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) for dated evidence.
+
+## Assistant architecture
+
+The next build is described in [DEREK_ALWAYS_ON_PLAN.md](DEREK_ALWAYS_ON_PLAN.md). The shared foundation now includes a Features page, per-conversation model profiles, persistent Telegram/desktop voice context, durable commands and exact reminder/Calendar confirmation cards. New conversations default to Gemini; the Features page can select the current installation model instead. Existing conversations keep their selected profile and background research retains `MODEL_PROVIDER`. No provider is silently substituted.
+
+Chat uses the asynchronous command API and retains its request ID while retrieving a result. Text, voice and Telegram mutations prepare a two-minute confirmation; confirm the exact action or cancel it. Workflow activation still requires Automations review. Command/action/delivery records are separate so a lost reply does not automatically execute an action again. Command event history uses JSON polling. Desktop speech audio now streams from Cartesia; model token streaming and a server audio socket remain planned.
+
+`./scripts/start-services.ps1` now launches the managed local app by default. Use its explicit `-Celery` mode only for the separate legacy development stack. Local logs and database snapshots are in the ignored `.companion` folder. Keep the services and laptop running until cloud cutover.
+
+For the spare Galaxy A32/Airtel number, see [PHONE_SETUP.md](PHONE_SETUP.md). Phone forwarding and a voice gateway are not configured yet.
+
+## Fresh Windows installation
+
+For the complete managed local setup, follow [LOCAL_APP.md](LOCAL_APP.md). Existing users should keep their ignored `.env`, database and paired browser profile. The commands below describe the optional development stack; stop the managed local runtime before using that stack.
+
+### Legacy development stack
 
 Python 3.11+ and Node 22+ are required. Docker Desktop provides PostgreSQL and Redis; SQLite is available for development without Docker.
 
@@ -36,10 +66,12 @@ For reminders/background research, start Redis (`docker compose up -d redis`) an
 
 ```powershell
 ..\.venv\Scripts\celery -A config worker --pool=solo --loglevel=INFO
+..\.venv\Scripts\celery -A config worker --pool=solo --loglevel=INFO --queues=interactive --hostname=interactive@%h
+..\.venv\Scripts\celery -A config worker --pool=solo --loglevel=INFO --queues=delivery --hostname=delivery@%h
 ..\.venv\Scripts\celery -A config beat --loglevel=INFO --schedule=../.companion/celerybeat-schedule
 ```
 
-Create `.companion` first with `New-Item -ItemType Directory -Force .companion` from the root. Windows Celery runs with the solo pool for development; production workers run in Linux containers. Run only one Beat process. Without a worker and Beat, requests are saved as queued jobs and do not execute in the background.
+Create `.companion` first with `New-Item -ItemType Directory -Force .companion` from the root. Run each command in its own terminal. The first worker consumes the default research queue; the next two handle chat and delivery. Windows Celery runs with the solo pool for development; production workers run in Linux containers. Run only one Beat process. Without the corresponding workers and Beat, saved commands/jobs remain queued.
 
 Alternatively, run the complete local PostgreSQL/Redis/app/worker/Beat stack with `docker compose up --build -d`; create the owner with `docker compose exec web python backend/manage.py create_owner YOUR_USERNAME`, then open `http://127.0.0.1:8000`. Local Compose is bound to loopback and uses development settings. Use the separate production configuration for hosting.
 
@@ -47,7 +79,7 @@ Alternatively, run the complete local PostgreSQL/Redis/app/worker/Beat stack wit
 
 - **Gemini:** configure `GEMINI_API_KEY` and `GEMINI_MODEL`. Function calling and Google Search grounding are separate calls. Model IDs are configurable because availability changes. Every model request reserves daily usage before execution. The call/input limits are application guards; set provider-side billing alerts separately.
 - **Calendar:** enable Calendar API in a Google Cloud project, create a web OAuth client, and register exactly the `GOOGLE_REDIRECT_URI` from `.env`. Set the client ID/secret and persistent `CREDENTIAL_ENCRYPTION_KEY`, then click Connect Google Calendar in Settings. Request scope is `calendar.events.owned`; the application exposes read/create/update, with no calendar deletion tool. Reconnect if Google revokes or expires the refresh token. Keep the encryption key stable to retain access to stored credentials.
-- **Telegram:** create a bot with BotFather, set bot token, your private chat ID, and a random webhook secret. The service needs public HTTPS. Run `python backend/manage.py configure_telegram https://YOUR_DOMAIN/v1/telegram/webhook/`. Only the configured chat is accepted. Update IDs are deduplicated; voice notes need the optional voice dependencies on the server.
+- **Telegram:** configure the bot token and your numeric private chat ID. The managed local app starts one long-polling receiver without public HTTPS, validates the approved private sender/chat, and preserves durable offsets. For cloud deployment, use an HTTPS webhook instead: set a random webhook secret and run `python backend/manage.py configure_telegram https://YOUR_DOMAIN/v1/telegram/webhook/`. Do not run both receivers. Voice notes need the optional transcription dependencies.
 - **Speech:** configure your Cartesia API key and licensed voice ID. Install `backend/requirements-voice.txt` to transcribe web/Telegram audio outside Docker. Docker includes the transcription package by default; the Whisper model downloads on first use. Desktop voice transcribes on the PC and sends the transcript to the API. Response text is sent to Cartesia for speech.
 
 Provider credentials are configured on your machine or in AWS Secrets Manager, never in the dashboard or repository. Google refresh credentials are encrypted in the database. The browser profile is local and is never sent to the backend.
@@ -71,7 +103,7 @@ For Google sign-in, set `LILYLEO_BROWSER_CHANNEL=chrome` (installed Google Chrom
 
 Closing the browser during manual login ends that session; it does not confirm a successful sign-in. Closed-browser cleanup is handled without a second `TargetClosedError` traceback. A sign-in session is ready only after you confirm success on the target website.
 
-For push-to-talk, set `LILYLEO_USER_TOKEN` using the current session token displayed through Settings, then run `python -m companion voice`. Device credentials cannot call chat APIs. Press Enter to record, Enter again to stop, and `q` to leave. The recording is capped at two minutes; microphone/speaker access and optional audio packages are required.
+For voice in the local app, sign in once and use Ctrl+Alt+Space or Settings → Open voice. Local sign-in refreshes online voice access in Windows Credential Manager; sign-out revokes it. The separate command-line client `python -m companion voice` remains available, with `LILYLEO_USER_TOKEN` as an advanced legacy fallback. Device credentials cannot call chat APIs. Capture requires explicit arming; follow-ups retain context, sessions are bounded and unresolved requests can be retrieved without resending. See [VOICE_SETUP.md](VOICE_SETUP.md) for controls, confirmations and live acceptance still required.
 
 ## Workflow review and recovery
 

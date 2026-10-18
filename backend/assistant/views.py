@@ -44,12 +44,18 @@ def login(request):
     if get_user_model().objects.filter(is_active=True).count() != 1:
         return Response({"detail": "This service supports one active user. Configure the owner account."}, status=503)
     token, _ = Token.objects.get_or_create(user=user)
+    if settings.LOCAL_EXECUTION:
+        from desktop.credentials import remember_owner_token
+        remember_owner_token("http://127.0.0.1:8000", token.key, user.username)
     audit(user, "auth.login")
     return Response({"token": token.key, "username": user.username})
 
 @api_view(["POST"])
 def logout(request):
     Token.objects.filter(user=request.user).delete()
+    if settings.LOCAL_EXECUTION:
+        from desktop.credentials import forget_owner_token
+        forget_owner_token("http://127.0.0.1:8000")
     audit(request.user, "auth.logout")
     return Response({"logged_out": True})
 
@@ -67,14 +73,20 @@ def turn(request):
                 for chunk in audio.chunks():
                     stream.write(chunk)
             text = transcribe_audio(path, settings.WHISPER_MODEL)
-    return Response(services.turn(request.user, text, request.data.get("conversation_id") or None))
+    return Response(services.turn(request.user, text, request.data.get("conversation_id") or None,
+                                  request_id=request.data.get("request_id"), input_mode="voice" if "audio" in request.FILES else request.data.get("input_mode", "text")))
 
 @api_view(["GET", "DELETE"])
 def conversations(request, pk=None):
     if pk:
         row = owned(m.Conversation, request, pk)
         if request.method == "DELETE":
-            row.delete()
+            with transaction.atomic():
+                get_user_model().objects.select_for_update().get(pk=request.user.pk)
+                row = owned(m.Conversation, request, pk)
+                if row.commands.filter(status__in=["running", "queued"]).exists() or m.ActionProposal.objects.filter(action__command__conversation=row, status="executing").exists():
+                    return Response({"detail": "Wait for queued/running conversation turns before deleting this conversation."}, status=409)
+                row.delete()
             return Response(status=204)
         return Response({**data(row), "messages": [{"id": msg.pk, "role": msg.role, "content": msg.content, "created_at": msg.created_at, **msg.metadata} for msg in row.messages.filter(role__in=["user", "assistant"])]})
     return Response([data(row) for row in m.Conversation.objects.filter(user=request.user).order_by("-created_at")[:200]])
@@ -83,31 +95,67 @@ def conversations(request, pk=None):
 def scheduled_tasks(request, pk=None, action=None):
     if pk:
         row = owned(m.ScheduledTask, request, pk)
+        if action == "history" and request.method == "GET":
+            return Response([{**model_to_dict(item), "id": str(item.id), "created_at": item.created_at} for item in m.ScheduledOccurrence.objects.filter(task=row).order_by("-scheduled_for")[:30]])
+        if request.method == "PATCH":
+            if row.kind == "workflow":
+                raise ValueError("Edit the workflow and review it in Automations before changing its trigger.")
+            if set(request.data) - {"name", "payload", "schedule", "expected"}:
+                raise ValueError("Only name, payload and schedule can be edited here.")
+            with transaction.atomic():
+                row = m.ScheduledTask.objects.select_for_update().get(pk=row.pk)
+                if request.data.get("expected") and request.data["expected"] != task_version(row):
+                    return Response({"detail": "This routine changed while you were editing it. Close the editor, refresh and review the current schedule."}, status=409)
+                clean = services.prepare_task(request.user, {"kind": row.kind, "name": request.data.get("name", row.name), "payload": request.data.get("payload", row.payload), "schedule": request.data.get("schedule", row.schedule)})
+                for key, value in clean.items():
+                    setattr(row, key, value)
+                from .scheduling import next_due
+                row.next_run_at = next_due(row.schedule) if row.enabled else None
+                row.save()
+                m.ScheduledOccurrence.objects.filter(task=row, status="pending").update(status="cancelled")
+                audit(request.user, "task.updated", task_id=str(row.pk))
+            return Response({**data(row), "revision": task_version(row)})
         if request.method == "DELETE":
-            m.ScheduledOccurrence.objects.filter(task=row, status="pending").delete()
-            row.delete()
+            with transaction.atomic():
+                row = m.ScheduledTask.objects.select_for_update().get(pk=row.pk)
+                if m.ScheduledOccurrence.objects.filter(task=row, status="running").exists():
+                    return Response({"detail": "This routine is dispatching a saved occurrence. Wait for it to finish before deleting its history."}, status=409)
+                row.delete()
             return Response(status=204)
         if action in {"pause", "resume"} and request.method == "POST":
-            row.enabled = action == "resume"
-            if row.enabled:
-                from .scheduling import next_due
-                row.next_run_at = next_due(row.schedule)
-                if row.next_run_at is None:
-                    raise ValueError("One-off task is in the past; create a new task")
-            row.save()
-            if not row.enabled:
-                m.ScheduledOccurrence.objects.filter(task=row, status="pending").update(status="cancelled")
+            with transaction.atomic():
+                row = m.ScheduledTask.objects.select_for_update().get(pk=row.pk)
+                row.enabled = action == "resume"
+                if row.enabled:
+                    from .scheduling import next_due
+                    row.next_run_at = next_due(row.schedule)
+                    if row.next_run_at is None:
+                        raise ValueError("One-off task is in the past; create a new task")
+                row.save()
+                if not row.enabled:
+                    m.ScheduledOccurrence.objects.filter(task=row, status="pending").update(status="cancelled")
             audit(request.user, "task." + action, task_id=str(row.id))
             return Response(data(row))
-        return Response(data(row))
+        if request.method != "GET":
+            return Response({"detail": "Use Edit, Pause or Resume for this routine."}, status=405)
+        return Response({**data(row), "revision": task_version(row)})
     if request.method == "POST":
-        return Response(data(services.create_task(request.user, request.data)), status=201)
-    return Response([data(row) for row in m.ScheduledTask.objects.filter(user=request.user).order_by("-created_at")[:200]])
+        from .form_requests import create_once
+        row, created = create_once(request.user, "task", dict(request.data), m.ScheduledTask, lambda: services.create_task(request.user, request.data))
+        return Response(data(row), status=201 if created else 200)
+    if request.method != "GET":
+        return Response({"detail": "Use POST to create a task."}, status=405)
+    return Response([{**data(row), "revision": task_version(row)} for row in m.ScheduledTask.objects.filter(user=request.user).order_by("-created_at")[:200]])
+
+def task_version(row):
+    from .utils import payload_digest
+    return payload_digest({"name": row.name, "kind": row.kind, "payload": row.payload, "schedule": row.schedule, "enabled": row.enabled})
 
 @api_view(["GET", "POST", "PATCH", "DELETE"])
+@transaction.atomic
 def workflows(request, pk=None, action=None):
     if pk:
-        row = owned(m.Workflow, request, pk)
+        row = get_object_or_404(m.Workflow.objects.select_for_update(), user=request.user, pk=pk)
         if request.method == "DELETE":
             cancel_workflow(row)
             row.delete()
@@ -137,7 +185,9 @@ def workflows(request, pk=None, action=None):
             audit(row.user, "workflow.edited", workflow_id=str(row.id), version=row.version)
         return Response(data(row))
     if request.method == "POST":
-        return Response(data(services.create_workflow(request.user, request.data)), status=201)
+        from .form_requests import create_once
+        row, created = create_once(request.user, "workflow", dict(request.data), m.Workflow, lambda: services.create_workflow(request.user, request.data))
+        return Response(data(row), status=201 if created else 200)
     return Response([data(row) for row in m.Workflow.objects.filter(user=request.user).order_by("-created_at")[:200]])
 
 def cancel_workflow(workflow):
@@ -148,9 +198,10 @@ def cancel_workflow(workflow):
     m.ScheduledTask.objects.filter(user=workflow.user, kind="workflow", payload__workflow_id=str(workflow.id)).delete()
 
 @api_view(["GET", "POST"])
+@transaction.atomic
 def runs(request, pk=None):
     if pk:
-        run = owned(m.WorkflowRun, request, pk)
+        run = get_object_or_404(m.WorkflowRun.objects.select_for_update(), user=request.user, pk=pk)
         if request.method == "POST":
             m.DesktopJob.objects.filter(run=run).exclude(status="completed").update(status="cancelled")
             m.Approval.objects.filter(run=run, status="pending").update(status="rejected")
@@ -178,17 +229,46 @@ def approvals(request, pk=None, action=None):
         results.append({**data(row), "reason": row.description, "tool": step["tool"], "payload": {"checkpoint": checkpoint, "pending_action": pending_action, "reviewed_step": step}})
     return Response(results)
 
-@api_view(["GET", "DELETE"])
-def reports(request, pk=None):
+@api_view(["GET", "POST", "DELETE"])
+def reports(request, pk=None, detail=False, action=None):
     if pk:
         row = owned(m.Report, request, pk)
+        if request.method == "POST":
+            if action == "deliver":
+                if not settings.TELEGRAM_BOT_TOKEN or not settings.TELEGRAM_CHAT_ID:
+                    raise ValueError("Configure the approved Telegram bot and private chat before sending a report.")
+                if request.data.get("confirm_copy") is not True:
+                    raise ValueError("Confirm that you want a PDF copy sent to your approved Telegram chat.")
+                with transaction.atomic():
+                    row = m.Report.objects.select_for_update().get(pk=row.pk)
+                    if row.status != "completed" or not row.pdf:
+                        return Response({"detail": "The report PDF is not ready."}, status=409)
+                    if row.progress.get("telegram_delivery", {}).get("status") in {"sending", "pending"}:
+                        return Response({"detail": "A PDF delivery is already queued or running."}, status=409)
+                    row.progress = {**row.progress, "telegram_delivery": {"status": "pending", "due_at": timezone.now().isoformat()}}
+                    row.save(update_fields=["progress"])
+                from .tasks import send_report_file
+                kick(send_report_file, str(row.id))
+                audit(request.user, "report.telegram_copy_requested", report_id=str(row.id))
+                return Response({"queued": True}, status=202)
+            if action != "cancel":
+                return Response({"detail": "Use the report collection to request new research."}, status=405)
+            changed = m.Report.objects.filter(pk=row.pk, status__in=["queued", "running"]).update(status="cancelled", progress={"stage": "cancelled", "label": "Research stopped"}, updated_at=timezone.now())
+            if changed:
+                audit(request.user, "report.cancelled", report_id=str(row.id))
+            row.refresh_from_db()
+            return Response({"status": row.status, "message": "Research stopped. Already accepted provider usage may still count." if changed else "The report already has a saved outcome."})
         if request.method == "DELETE":
-            if row.status == "running":
-                return Response({"detail": "Wait for the report job to finish before deleting"}, status=409)
-            row.docx.delete(save=False)
-            row.pdf.delete(save=False)
-            row.delete()
+            with transaction.atomic():
+                row = m.Report.objects.select_for_update().get(pk=row.pk)
+                if row.status == "running" or row.progress.get("telegram_delivery", {}).get("status") == "sending":
+                    return Response({"detail": "Stop the research job or wait for it to finish before deleting"}, status=409)
+                row.docx.delete(save=False)
+                row.pdf.delete(save=False)
+                row.delete()
             return Response(status=204)
+        if detail:
+            return Response({**data(row, ["docx", "pdf"]), "files": {"pdf": bool(row.pdf), "docx": bool(row.docx)}})
         fmt = request.query_params.get("format", "pdf")
         if fmt not in {"docx", "pdf"}:
             raise ValueError("Choose pdf or docx")
@@ -196,13 +276,31 @@ def reports(request, pk=None):
         if row.status != "completed" or not file:
             return Response({"detail": "Report file is not ready"}, status=409)
         return FileResponse(file.open("rb"), as_attachment=True, filename=f"Derek-{row.id}.{fmt}")
-    return Response([{**data(row, ["docx", "pdf"]), "summary": row.content.get("executive_summary", ""), "files": {"pdf": bool(row.pdf), "docx": bool(row.docx)}} for row in m.Report.objects.filter(user=request.user).order_by("-created_at")[:200]])
+    if request.method == "POST":
+        if services.state(request.user).paused:
+            raise ValueError("Resume automations before requesting research.")
+        from .contracts import ResearchArgs
+        raw = dict(request.data)
+        request_id = raw.pop("request_id", None)
+        clean = ResearchArgs.model_validate(raw).model_dump()
+        from .form_requests import create_once
+        row, created = create_once(request.user, "report", {**clean, **({"request_id": request_id} if request_id is not None else {})}, m.Report,
+                                   lambda: m.Report.objects.create(user=request.user, title=clean["topic"][:240], content=clean))
+        from .tasks import research_report
+        kick(research_report, str(row.id))
+        if created:
+            audit(request.user, "report.queued", report_id=str(row.id))
+        return Response(data(row, ["docx", "pdf"]), status=202 if created else 200)
+    return Response([{**data(row, ["docx", "pdf", "content"]), "summary": row.content.get("executive_summary", ""), "files": {"pdf": bool(row.pdf), "docx": bool(row.docx)}, "report_kind": row.content.get("report_kind", "standard")} for row in m.Report.objects.filter(user=request.user).order_by("-created_at")[:200]])
 
 @api_view(["GET"])
 def status(request):
+    from .capabilities import profile_details, preferences
+    from .local_status import runtime_status
     usage = m.UsageDay.objects.filter(user=request.user, date=timezone.localdate()).values("model_calls", "input_chars", "input_tokens", "output_tokens").first() or {}
     assistant_state = services.state(request.user)
     return Response({
+        "runtime": runtime_status(),
         "paused": assistant_state.paused,
         "scheduler_online": bool(assistant_state.scheduler_heartbeat_at and assistant_state.scheduler_heartbeat_at > timezone.now()-timedelta(seconds=60)),
         "scheduler_last_seen": assistant_state.scheduler_heartbeat_at,
@@ -210,6 +308,10 @@ def status(request):
         "timezone": settings.TIME_ZONE,
         "pending_runs": m.WorkflowRun.objects.filter(user=request.user, status__in=["queued", "waiting_desktop"]).count(),
         "attention_needed": m.WorkflowRun.objects.filter(user=request.user, status="needs_attention").count(),
+        "active_commands": m.Command.objects.filter(user=request.user, status__in=["queued", "running"]).count(),
+        "pending_confirmations": m.ActionProposal.objects.filter(user=request.user, status="pending", expires_at__gt=timezone.now()).count(),
+        "unread_notifications": m.Notification.objects.filter(user=request.user, read_at__isnull=True).count(),
+        "interactive_model": profile_details(request.user, preferences(request.user).interactive_profile),
         "language_model": {"provider": settings.MODEL_PROVIDER, "model": settings.OLLAMA_MODEL if settings.MODEL_PROVIDER == "ollama" else settings.GEMINI_MODEL,
                            "local": settings.MODEL_PROVIDER == "ollama", "web_search": "public search snippets" if settings.MODEL_PROVIDER == "ollama" else "Google Search grounding"},
         "integrations": {"gemini": bool(settings.GEMINI_API_KEY), "ollama": settings.MODEL_PROVIDER == "ollama" and bool(settings.OLLAMA_MODEL), "telegram": bool(settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID), "cartesia": bool(settings.CARTESIA_API_KEY and settings.CARTESIA_VOICE_ID), "calendar": {"configured": bool(settings.GOOGLE_CLIENT_ID and settings.CREDENTIAL_ENCRYPTION_KEY), "connected": m.ProviderCredential.objects.filter(user=request.user, provider="google").exists()}},
@@ -230,8 +332,14 @@ def control(request):
 def activity(request):
     return Response([{**data(row), "action": row.event, "details": row.detail} for row in m.AuditEvent.objects.filter(user=request.user)[:300]])
 
-@api_view(["GET"])
-def notifications(request):
+@api_view(["GET", "POST"])
+def notifications(request, pk=None):
+    if request.method == "POST":
+        rows = m.Notification.objects.filter(user=request.user, read_at__isnull=True)
+        if pk:
+            rows = rows.filter(pk=pk)
+        rows.update(read_at=timezone.now())
+        return Response({"read": True})
     return Response([data(row) for row in m.Notification.objects.filter(user=request.user).order_by("-created_at")[:100]])
 
 @api_view(["GET", "POST", "DELETE"])
@@ -375,11 +483,34 @@ def calendar_events(request):
 
 @api_view(["GET"])
 def export_data(request):
-    return Response({"conversations": [{**data(row), "messages": list(row.messages.values("role", "content", "created_at"))} for row in m.Conversation.objects.filter(user=request.user)], "tasks": [data(row) for row in m.ScheduledTask.objects.filter(user=request.user)], "workflows": [data(row) for row in m.Workflow.objects.filter(user=request.user)], "reports": [data(row, ["docx", "pdf"]) for row in m.Report.objects.filter(user=request.user)], "audit": [data(row) for row in m.AuditEvent.objects.filter(user=request.user)]}, headers={"Content-Disposition": 'attachment; filename="derek-export.json"'})
+    payload = {
+        "schema_version": 1,
+        "exported_at": timezone.now(),
+        "timezone": settings.TIME_ZONE,
+        "scope": "Normal assistant records only. Download report attachments separately; private local chat has its own export. Credentials are excluded.",
+        "conversations": [{**data(row), "messages": list(row.messages.values("role", "content", "metadata", "created_at"))}
+                          for row in m.Conversation.objects.filter(user=request.user)],
+        "reports": [data(row, ["docx", "pdf"]) for row in m.Report.objects.filter(user=request.user)],
+        "preferences": m.AssistantPreferences.objects.filter(user=request.user).values("interactive_profile", "telegram_voice_replies").first(),
+        "occurrences": [data(row) for row in m.ScheduledOccurrence.objects.filter(task__user=request.user)],
+        "command_events": [data(row) for row in m.CommandEvent.objects.filter(command__user=request.user)],
+    }
+    for name, model in {
+        "tasks": m.ScheduledTask, "workflows": m.Workflow, "workflow_runs": m.WorkflowRun,
+        "notifications": m.Notification, "audit": m.AuditEvent, "commands": m.Command,
+        "actions": m.ActionExecution, "action_proposals": m.ActionProposal, "deliveries": m.Delivery,
+    }.items():
+        payload[name] = [data(row) for row in model.objects.filter(user=request.user)]
+    return Response(payload, headers={"Content-Disposition": 'attachment; filename="derek-export.json"'})
 
 @api_view(["DELETE"])
 def delete_history(request):
-    m.Conversation.objects.filter(user=request.user).delete()
+    with transaction.atomic():
+        get_user_model().objects.select_for_update().get(pk=request.user.pk)
+        if (m.Command.objects.filter(user=request.user, status__in=["queued", "running"]).exists()
+                or m.ActionProposal.objects.filter(user=request.user, status="executing").exists()):
+            return Response({"detail": "Wait for queued/running conversation turns before deleting history."}, status=409)
+        m.Conversation.objects.filter(user=request.user).delete()
     audit(request.user, "history.deleted")
     return Response({"deleted": True})
 
@@ -390,12 +521,10 @@ def delete_history(request):
 def telegram_webhook(request):
     if not settings.TELEGRAM_WEBHOOK_SECRET or not secrets.compare_digest(request.headers.get("X-Telegram-Bot-Api-Secret-Token", ""), settings.TELEGRAM_WEBHOOK_SECRET):
         return Response(status=403)
-    message = request.data.get("message", {})
-    if not settings.TELEGRAM_CHAT_ID or str(message.get("chat", {}).get("id")) != settings.TELEGRAM_CHAT_ID:
-        return Response({"ok": True})
-    if not (message.get("text") or message.get("voice")) or type(request.data.get("update_id")) is not int:
-        return Response({"ok": True})
-    row, created = m.TelegramUpdate.objects.get_or_create(update_id=request.data["update_id"], defaults={"payload": {"message": message}})
+    if not isinstance(request.data, dict):
+        return Response({"ok": False}, status=400)
+    from .telegram_ingress import store_update
+    row, created = store_update(request.data)
     if created:
         from .tasks import process_telegram
         kick(process_telegram, row.update_id)

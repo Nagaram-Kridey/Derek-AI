@@ -44,7 +44,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 20
-  worker:
+  worker: &worker
     image: lilyleo:local
     env_file:
       - path: .env
@@ -52,10 +52,16 @@ services:
     environment:
       <<: *app-env
       RUN_MIGRATIONS: "false"
-    command: ["celery", "-A", "config", "worker", "--loglevel=INFO", "--concurrency=2"]
+    command: ["celery", "-A", "config", "worker", "--loglevel=INFO", "--concurrency=1", "--queues=celery", "--hostname=research@%h"]
     volumes: ["reports:/app/backend/media"]
     depends_on:
       web: {condition: service_healthy}
+  interactive:
+    <<: *worker
+    command: ["celery", "-A", "config", "worker", "--loglevel=INFO", "--concurrency=1", "--queues=interactive", "--hostname=interactive@%h"]
+  delivery:
+    <<: *worker
+    command: ["celery", "-A", "config", "worker", "--loglevel=INFO", "--concurrency=1", "--queues=delivery", "--hostname=delivery@%h"]
   beat:
     image: lilyleo:local
     env_file:

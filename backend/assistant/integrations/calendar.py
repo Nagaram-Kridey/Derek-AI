@@ -18,6 +18,10 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 CALENDAR_URL = "https://www.googleapis.com/calendar/v3/calendars"
 
 
+class CalendarConflict(ValueError):
+    """A conditional write was rejected before it changed the event."""
+
+
 def build_auth_url(client_id: str, redirect_uri: str, state: str) -> str:
     if not client_id or not redirect_uri:
         raise ConfigError("Configure GOOGLE_CLIENT_ID and GOOGLE_REDIRECT_URI.")
@@ -75,13 +79,18 @@ def _request(method, token, calendar_id="primary", event_id=None, **kwargs):
     if event_id:
         url += "/" + quote(event_id, safe="")
     try:
-        response = httpx.request(method, url, headers={"Authorization": f"Bearer {token}"}, timeout=20, follow_redirects=False, **kwargs)
+        extra_headers = kwargs.pop("headers", {})
+        response = httpx.request(method, url, headers={"Authorization": f"Bearer {token}", **extra_headers}, timeout=20, follow_redirects=False, **kwargs)
+        if response.status_code == 412:
+            raise CalendarConflict("This event changed after the readback. Ask again to review the current version.")
         response.raise_for_status()
         result = response.json()
         if not isinstance(result, dict):
             raise ValueError
         return result
     except (httpx.HTTPError, ValueError) as exc:
+        if isinstance(exc, CalendarConflict):
+            raise
         raise ProviderError("Google Calendar request failed. Check authorization and event details.") from exc
 
 
@@ -149,12 +158,22 @@ def _event_body(args, partial=False):
     return body
 
 
+def validate_event(args, partial=False):
+    return _event_body(args, partial=partial)
+
+
+def get_event(token, event_id, calendar_id="primary"):
+    if not isinstance(event_id, str) or not event_id or len(event_id) > 1024:
+        raise ValueError("An exact event ID is required.")
+    return _request("GET", token, calendar_id, event_id=event_id)
+
+
 def create_event(token, args: dict):
     return _request("POST", token, args.get("calendar_id", args.get("calendarId", "primary")), json=_event_body(args), params={"sendUpdates": "none"})
 
 
-def update_event(token, event_id: str, args: dict):
+def update_event(token, event_id: str, args: dict, expected_etag=None):
     if not isinstance(event_id, str) or not event_id or len(event_id) > 1024:
         raise ValueError("An event ID is required.")
     return _request("PATCH", token, args.get("calendar_id", args.get("calendarId", "primary")), event_id=event_id,
-                    json=_event_body(args, partial=True), params={"sendUpdates": "none"})
+                    json=_event_body(args, partial=True), params={"sendUpdates": "none"}, headers={"If-Match": expected_etag} if expected_etag else {})

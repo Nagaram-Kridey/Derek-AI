@@ -26,6 +26,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 MIDDLEWARE = [
+    "assistant.middleware.WorkspaceHeaders",
     "django.middleware.security.SecurityMiddleware", "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware", "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware", "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -34,6 +35,11 @@ MIDDLEWARE = [
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {"default": dj_database_url.parse(os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'db.sqlite3'}"), conn_max_age=60)}
+if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
+    # SQLite has no row-level FOR UPDATE. Acquire its write reservation at the
+    # transaction boundary so local command/action claims remain serialized.
+    DATABASES["default"]["OPTIONS"] = {"timeout": 30, "transaction_mode": "IMMEDIATE"}
+LOCAL_EXECUTION = os.getenv("DEREK_LOCAL_EXECUTION", "false").lower() == "true"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
 TIME_ZONE = os.getenv("ASSISTANT_TIMEZONE", "Asia/Kolkata")
@@ -48,11 +54,11 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.TokenAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.UserRateThrottle"],
-    "DEFAULT_THROTTLE_RATES": {"user": "120/min", "login": "10/min"},
+    "DEFAULT_THROTTLE_RATES": {"user": "300/min", "login": "10/min", "commands": "30/min"},
     "EXCEPTION_HANDLER": "assistant.api_errors.exception_handler",
 }
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
-if not DEBUG and "pytest" not in __import__("sys").modules:
+if not DEBUG and not LOCAL_EXECUTION and "pytest" not in __import__("sys").modules:
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": REDIS_URL}}
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
@@ -67,6 +73,14 @@ CELERY_TIMEZONE = "UTC"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
+CELERY_TASK_ROUTES = {
+    "assistant.process_command": {"queue": "interactive"},
+    "assistant.process_telegram": {"queue": "interactive"},
+    "assistant.deliver_command": {"queue": "delivery"},
+    "assistant.deliver_notification": {"queue": "delivery"},
+    "assistant.send_report_file": {"queue": "delivery"},
+    "assistant.execute_occurrence": {"queue": "delivery"},
+}
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 MODEL_PROVIDER = os.getenv("MODEL_PROVIDER", "gemini").strip().lower()
@@ -79,6 +93,7 @@ CARTESIA_VOICE_ID = os.getenv("CARTESIA_VOICE_ID", "")
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+TELEGRAM_USER_ID = os.getenv("TELEGRAM_USER_ID") or TELEGRAM_CHAT_ID
 TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")

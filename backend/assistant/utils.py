@@ -6,7 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 from cryptography.fernet import Fernet
 from .models import AuditEvent, ProviderCredential, UsageDay
-from .integrations.errors import ConfigError
+from .integrations.errors import ConfigError, ProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -47,27 +47,55 @@ def reserve_usage(user, input_chars):
 
 class BudgetGateway:
     """Count every provider call, including internal research calls, before sending."""
-    def __init__(self, user):
+    def __init__(self, user, profile=None, cancelled=None):
         from .integrations.models import create_gateway
         self.user = user
-        self.gateway = create_gateway()
+        self.gateway = create_gateway(profile)
+        self.provider = "gemini" if profile == "gemini" else settings.MODEL_PROVIDER
+        self.cancelled = cancelled
+        self.gateway.cancelled = cancelled
 
     def __getattr__(self, name):
         method = getattr(self.gateway, name)
         def call(*args, **kwargs):
             from django.db.models import F
+            from .integrations.errors import RequestCancelled
+            if self.cancelled and self.cancelled():
+                raise RequestCancelled("Research cancelled.")
             pk = reserve_usage(self.user, len(json.dumps([args, kwargs], default=str)))
             try:
-                return method(*args, **kwargs)
+                result = method(*args, **kwargs)
+                if self.cancelled and self.cancelled():
+                    raise RequestCancelled("Research cancelled.")
+                self._health(True)
+                return result
+            except (ConfigError, ProviderError) as exc:
+                self._health(False, str(exc))
+                raise
             finally:
                 usage = self.gateway.last_usage
                 UsageDay.objects.filter(pk=pk).update(input_tokens=F("input_tokens") + usage.get("input_tokens", 0), output_tokens=F("output_tokens") + usage.get("output_tokens", 0))
                 self.gateway.last_usage = {"input_tokens": 0, "output_tokens": 0}
         return call
 
+    def _health(self, succeeded, error=""):
+        from .models import ModelHealth
+        model_name = settings.GEMINI_MODEL if self.provider == "gemini" else settings.OLLAMA_MODEL
+        changes = {"last_success_at" if succeeded else "last_failure_at": timezone.now()}
+        if not succeeded:
+            changes["error"] = error[:1000]
+        ModelHealth.objects.update_or_create(user=self.user, provider=self.provider, model_name=model_name, defaults=changes)
+
 def kick(task, *args):
-    try:
-        task.delay(*args)
-    except Exception:
-        # Pending rows survive a broker outage; Beat republishes them later.
-        logger.warning("Job saved; broker unavailable. Scheduler will dispatch pending work.")
+    if settings.LOCAL_EXECUTION:
+        # The local supervisor's lanes poll the same durable outbox rows. Do
+        # not create a second delivery path or require a broker on the laptop.
+        return
+    def publish():
+        try:
+            task.delay(*args)
+        except Exception:
+            # Pending rows survive a broker outage; Beat republishes them later.
+            logger.warning("Job saved; broker unavailable. Scheduler will dispatch pending work.")
+    # A worker must never see an event before its database record commits.
+    transaction.on_commit(publish)

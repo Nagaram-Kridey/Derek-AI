@@ -14,9 +14,101 @@ class AssistantState(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     paused = models.BooleanField(default=False)
     scheduler_heartbeat_at = models.DateTimeField(null=True)
+    telegram_offset = models.BigIntegerField(default=0)
 
 class Conversation(Owned):
     title = models.CharField(max_length=160)
+    model_profile = models.CharField(max_length=24, default="configured")
+
+class AssistantPreferences(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    interactive_profile = models.CharField(max_length=24, default="gemini")
+    telegram_voice_replies = models.BooleanField(default=False)
+
+class ChannelSession(Owned):
+    channel = models.CharField(max_length=24)
+    external_key = models.CharField(max_length=100)
+    conversation = models.ForeignKey(Conversation, null=True, on_delete=models.SET_NULL)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "channel", "external_key"], name="unique_channel_session")]
+
+class Command(Owned):
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name="commands")
+    channel = models.CharField(max_length=24, default="web")
+    request_id = models.CharField(max_length=128)
+    input_mode = models.CharField(max_length=12, default="text")
+    input_text = models.TextField()
+    fingerprint = models.CharField(max_length=64)
+    model_profile = models.CharField(max_length=24, default="configured")
+    status = models.CharField(max_length=32, default="queued")
+    response = models.JSONField(default=dict)
+    error = models.TextField(blank=True)
+    started_at = models.DateTimeField(null=True)
+    finished_at = models.DateTimeField(null=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "channel", "request_id"], name="unique_channel_command")]
+
+class CommandEvent(models.Model):
+    command = models.ForeignKey(Command, on_delete=models.CASCADE, related_name="events")
+    kind = models.CharField(max_length=32)
+    detail = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class CommandCancellation(Owned):
+    channel = models.CharField(max_length=24, default="web")
+    request_id = models.CharField(max_length=128)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "channel", "request_id"], name="unique_cancelled_request")]
+
+class FormRequest(Owned):
+    kind = models.CharField(max_length=32)
+    request_id = models.CharField(max_length=128)
+    fingerprint = models.CharField(max_length=64)
+    resource_id = models.UUIDField()
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "kind", "request_id"], name="unique_form_request")]
+
+class ActionExecution(Owned):
+    command = models.ForeignKey(Command, on_delete=models.CASCADE, related_name="actions")
+    step = models.PositiveIntegerField()
+    tool = models.CharField(max_length=80)
+    args = models.JSONField(default=dict)
+    status = models.CharField(max_length=32, default="pending")
+    result = models.JSONField(default=dict)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["command", "step"], name="unique_command_action")]
+
+class ActionProposal(Owned):
+    action = models.OneToOneField(ActionExecution, on_delete=models.CASCADE, related_name="proposal")
+    revision = models.PositiveIntegerField(default=1)
+    payload_digest = models.CharField(max_length=64)
+    readback = models.TextField()
+    status = models.CharField(max_length=24, default="pending")
+    expires_at = models.DateTimeField()
+    decided_at = models.DateTimeField(null=True)
+
+class Delivery(Owned):
+    command = models.ForeignKey(Command, on_delete=models.CASCADE, related_name="deliveries")
+    position = models.PositiveIntegerField()
+    destination = models.CharField(max_length=100)
+    text = models.TextField()
+    status = models.CharField(max_length=24, default="pending")
+    provider_message_id = models.CharField(max_length=100, blank=True)
+    due_at = models.DateTimeField(default=timezone.now)
+    started_at = models.DateTimeField(null=True)
+    sent_at = models.DateTimeField(null=True)
+    error = models.TextField(blank=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["command", "position"], name="unique_command_delivery")]
+
+class ModelHealth(Owned):
+    provider = models.CharField(max_length=24)
+    model_name = models.CharField(max_length=160)
+    last_success_at = models.DateTimeField(null=True)
+    last_failure_at = models.DateTimeField(null=True)
+    error = models.TextField(blank=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "provider", "model_name"], name="unique_model_health")]
 
 class Message(models.Model):
     conversation = models.ForeignKey(Conversation, related_name="messages", on_delete=models.CASCADE)
@@ -109,6 +201,7 @@ class Report(Owned):
     docx = models.FileField(upload_to="reports/%Y/%m/", blank=True)
     pdf = models.FileField(upload_to="reports/%Y/%m/", blank=True)
     error = models.TextField(blank=True)
+    progress = models.JSONField(default=dict)
     updated_at = models.DateTimeField(auto_now=True)
 
 class AuditEvent(Owned):
@@ -143,6 +236,7 @@ class Notification(Owned):
     started_at = models.DateTimeField(null=True)
     error = models.TextField(blank=True)
     sent_at = models.DateTimeField(null=True)
+    read_at = models.DateTimeField(null=True)
 
 class TelegramUpdate(models.Model):
     update_id = models.BigIntegerField(primary_key=True)
