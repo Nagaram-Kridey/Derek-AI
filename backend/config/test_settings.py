@@ -36,6 +36,8 @@ _media = tempfile.TemporaryDirectory(prefix="derek-test-media-")
 MEDIA_ROOT = _media.name
 STATIC_ROOT = str(Path(_media.name) / "staticfiles")
 Path(STATIC_ROOT).mkdir()
+WHITENOISE_ROOT = str(Path(_media.name) / "staticapp")
+Path(WHITENOISE_ROOT).mkdir()
 CELERY_BROKER_URL = "memory://"
 CELERY_RESULT_BACKEND = "cache+memory://"
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
