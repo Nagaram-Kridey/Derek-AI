@@ -68,7 +68,7 @@ class GeminiGateway(ResearchPlanningMixin):
                 raise ProviderError("Gemini is temporarily unavailable or busy. Please try again shortly.") from exc
             raise ProviderError("Gemini request failed. Check provider status, model access, and quota.") from exc
 
-    def chat(self, messages: list[dict], tools: list[dict], cancelled=None) -> dict:
+    def chat(self, messages: list[dict], tools: list[dict], cancelled=None, max_output_tokens=4096) -> dict:
         if not messages or len(messages) > 100:
             raise ValueError("Provide between 1 and 100 chat messages.")
         contents = []
@@ -93,7 +93,7 @@ class GeminiGateway(ResearchPlanningMixin):
         for declaration in tools[:32]:
             declaration = declaration.get("function", declaration)
             declarations.append({key: value for key, value in declaration.items() if key in {"name", "description", "parameters"}})
-        config = {"system_instruction": "\n".join(instructions), "temperature": 0.2, "max_output_tokens": 4096}
+        config = {"system_instruction": "\n".join(instructions), "temperature": 0.2, "max_output_tokens": min(max(int(max_output_tokens), 128), 4096)}
         if declarations:
             config["tools"] = [{"function_declarations": declarations}]
             config["automatic_function_calling"] = {"disable": True}

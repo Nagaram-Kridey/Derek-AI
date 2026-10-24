@@ -27,3 +27,5 @@ backend/staticapp/
 playwright/.auth/
 .tools/
 *.tsbuildinfo
+# Standalone public roadmap build output
+web_dashboard/dist-roadmap/

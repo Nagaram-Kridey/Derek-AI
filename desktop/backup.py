@@ -1,106 +1,58 @@
-"""Consistent local SQLite snapshots. No account calls or private-chat history."""
-
-from datetime import datetime, timezone
+"""Encrypted local recovery archives; verification never activates restored work."""
+import argparse
 import json
 import os
-from pathlib import Path
-import sqlite3
 import sys
-import tempfile
-
+from pathlib import Path
 from .state import ROOT, write_record
+from .recovery import RecoveryError, create_archive, restore_to, verify_archive
+
+
+def configured():
+    sys.path.insert(0, str(ROOT / 'backend'))
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+    import django
+    django.setup()
+    from django.conf import settings
+    return settings
 
 
 def create_backup():
-    sys.path.insert(0, str(ROOT / "backend"))
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-    import django
-
-    django.setup()
-    from django.conf import settings
-
-    database = settings.DATABASES["default"]
-    if database["ENGINE"] != "django.db.backends.sqlite3":
-        write_record(
-            "backup",
-            {
-                "status": "not_applicable",
-                "reason": "Use database-native backups for this installation.",
-            },
-        )
+    settings = configured()
+    database = settings.DATABASES['default']
+    if database['ENGINE'] != 'django.db.backends.sqlite3':
+        write_record('backup', {'status': 'not_applicable', 'reason': 'Use database-native backups for this installation.'})
         return None
-    folder = ROOT / ".companion" / "backups"
-    folder.mkdir(parents=True, exist_ok=True)
-    now = datetime.now(timezone.utc)
-    name = "derek-" + now.strftime("%Y%m%d-%H%M%S-") + os.urandom(3).hex()
-    key = settings.CREDENTIAL_ENCRYPTION_KEY
-    descriptor, temporary = tempfile.mkstemp(
-        prefix="snapshot-", suffix=".sqlite3", dir=folder
-    )
-    os.close(descriptor)
-    temporary_path = Path(temporary)
-    try:
-        source = sqlite3.connect(Path(database["NAME"]).resolve(), timeout=30)
-        target = sqlite3.connect(temporary_path, timeout=30)
-        try:
-            source.backup(target, pages=128, sleep=0.02)
-        finally:
-            target.close()
-            source.close()
-        if key:
-            from cryptography.fernet import Fernet
+    path, info = create_archive(database['NAME'], settings.MEDIA_ROOT, ROOT / '.companion/backups', settings.CREDENTIAL_ENCRYPTION_KEY)
+    verification = verify_archive(path, settings.CREDENTIAL_ENCRYPTION_KEY)
+    write_record('backup', {'status': 'ready', **info, 'verified': verification['verified'], 'file': path.name})
+    return path
 
-            body = Fernet(key.encode()).encrypt(temporary_path.read_bytes())
-            path = folder / (name + ".sqlite3.fernet")
-            with path.open("xb") as output:
-                output.write(body)
-                output.flush()
-                os.fsync(output.fileno())
+
+def main():
+    parser = argparse.ArgumentParser(description='Derek local encrypted backup and isolated recovery checks')
+    parser.add_argument('command', nargs='?', choices=['create','verify','restore-to'], default='create')
+    parser.add_argument('archive', nargs='?', type=Path)
+    parser.add_argument('--destination', type=Path, help='New directory for an offline restore export; never the live database.')
+    args = parser.parse_args()
+    try:
+        if args.command == 'create':
+            result = create_backup()
+            print('Encrypted database/report archive saved and verified.' if result else 'Use database-native backups.')
         else:
-            path = folder / (name + ".sqlite3")
-            os.replace(temporary_path, path)
-        manifest = {
-            "id": name,
-            "created_at": now.isoformat(),
-            "encrypted": bool(key),
-            "file": path.name,
-            "bytes": path.stat().st_size,
-            "scope": "Normal assistant SQLite database only. Private companion chat and separate report files are not included.",
-        }
-        (folder / (name + ".json")).write_text(
-            json.dumps(manifest, indent=2), encoding="utf-8"
-        )
-        write_record(
-            "backup",
-            {
-                "status": "ready",
-                "created_at": manifest["created_at"],
-                "encrypted": bool(key),
-                "bytes": manifest["bytes"],
-            },
-        )
-        return path
-    finally:
-        if temporary_path.exists():
-            temporary_path.unlink()
+            if not args.archive or (args.command == 'restore-to' and not args.destination):
+                parser.error('Specify an archive and, for restore-to, --destination with a new directory.')
+            key = configured().CREDENTIAL_ENCRYPTION_KEY
+            result = (verify_archive(args.archive, key) if args.command == 'verify'
+                      else restore_to(args.archive, args.destination, key))
+            print(json.dumps(result))
+    except Exception as exc:
+        if args.command == 'create':
+            write_record('backup', {'status': 'needs_attention', 'reason': str(exc) if isinstance(exc, RecoveryError)
+                         else 'Recovery archive could not be completed; check storage and local configuration.',
+                         'error_type': type(exc).__name__})
+        raise SystemExit(str(exc) if isinstance(exc, RecoveryError) else 'Recovery operation failed; no credential values were logged.') from None
 
 
-if __name__ == "__main__":
-    try:
-        result = create_backup()
-        print(
-            "Local database snapshot saved."
-            if result
-            else "Use database-native backups for the configured database."
-        )
-    except Exception:
-        write_record(
-            "backup",
-            {
-                "status": "needs_attention",
-                "reason": "The local snapshot could not be saved. Check available disk space and the configured encryption key.",
-            },
-        )
-        raise SystemExit(
-            "Local database backup needs attention; no credential values were logged."
-        ) from None
+if __name__ == '__main__':
+    main()

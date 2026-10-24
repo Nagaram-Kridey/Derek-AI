@@ -6,6 +6,7 @@ from pathlib import Path
 
 for name in (
     "GEMINI_API_KEY",
+    "FREELLMAPI_API_KEY",
     "CARTESIA_API_KEY",
     "CARTESIA_VOICE_ID",
     "TELEGRAM_BOT_TOKEN",

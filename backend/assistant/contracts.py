@@ -1,5 +1,6 @@
 """Workflow definitions are data. All executable actions have typed contracts."""
 from typing import Literal
+from functools import lru_cache
 from urllib.parse import urlsplit
 from pathlib import PureWindowsPath
 import ipaddress
@@ -17,10 +18,26 @@ class WriteArg(PathArg):
 class MoveArg(Strict):
     source: str
     destination: str
+class BrowserTarget(Strict):
+    by: Literal["role", "label", "text", "placeholder", "test_id"]
+    value: str = Field(min_length=1, max_length=500)
+    name: str | None = Field(default=None, min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def valid_target(self):
+        if self.by == "role" and not self.name:
+            raise ValueError("Role targets require an exact accessible name")
+        if self.by != "role" and self.name is not None:
+            raise ValueError("name is only supported for role targets")
+        return self
+
+
 class BrowserAction(Strict):
-    type: Literal["navigate", "read", "fill", "click", "select"]
+    type: Literal["navigate", "read", "fill", "click", "select", "wait", "scroll"]
     url: str | None = None
     selector: str | None = None
+    target: BrowserTarget | None = None
+    timeout_ms: int = Field(default=10000, ge=100, le=30000)
     value: str | None = None
     expected_url: str | None = None
     expected_text: str | None = None
@@ -29,8 +46,12 @@ class BrowserAction(Strict):
     def valid_action(self):
         if self.type == "navigate" and not self.url:
             raise ValueError("navigate requires url")
-        if self.type != "navigate" and not self.selector:
-            raise ValueError("DOM actions require a unique selector")
+        if self.selector and self.target:
+            raise ValueError("Choose either selector or target, never both")
+        if self.type == "navigate" and (self.selector or self.target):
+            raise ValueError("navigate does not accept a DOM target")
+        if self.type not in {"navigate", "read"} and not (self.selector or self.target):
+            raise ValueError("DOM actions require a unique selector or semantic target")
         if self.type in {"fill", "select", "click"} and (not self.expected_url or not self.expected_text):
             raise ValueError("Mutating actions require expected_url and expected_text")
         if self.type in {"fill", "select"} and self.value is None:
@@ -77,6 +98,26 @@ SCHEMAS = {
     "calendar.create": CalendarCreate, "calendar.update": CalendarUpdate,
 }
 DESKTOP_TOOLS = {name for name in SCHEMAS if name.startswith(("file.", "browser."))}
+
+
+@lru_cache(maxsize=1)
+def workflow_step_schema():
+    """Publish the same typed argument shapes that execution validates."""
+    def inline(value, definitions):
+        if isinstance(value, list):
+            return [inline(item, definitions) for item in value]
+        if not isinstance(value, dict):
+            return value
+        if "$ref" in value:
+            return inline(definitions[value["$ref"].split("/")[-1]], definitions)
+        return {key: inline(item, definitions) for key, item in value.items() if key not in {"$defs", "title", "default"}}
+    variants = []
+    for tool, model in SCHEMAS.items():
+        schema = model.model_json_schema()
+        variants.append({"type": "object", "properties": {"tool": {"type": "string", "enum": [tool]},
+                         "args": inline(schema, schema.get("$defs", {}))},
+                         "required": ["tool", "args"], "additionalProperties": False})
+    return {"anyOf": variants}
 
 def normalize_domain(value):
     if not isinstance(value, str):

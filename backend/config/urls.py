@@ -2,13 +2,22 @@ from django.urls import path
 from assistant import views as v
 from assistant import command_views as cv
 from assistant import local_views as lv
+from assistant import memory_views as mv
+from assistant import roadmap_views as rv
+from assistant import desktop_sessions as ds
 
 urlpatterns = [path("", v.dashboard), path("health/", v.health)]
 for suffix in ("", "/"):
     urlpatterns += [path(f"v1/auth/login{suffix}", v.login), path(f"v1/auth/logout{suffix}", v.logout), path(f"v1/turn{suffix}", v.turn)]
 urlpatterns += [
+    path('v1/local/session/launch/',ds.launch),
+    path('v1/local/session/exchange/',ds.exchange),
+    path("v1/roadmap/", rv.board),
+    path("v1/memories/", mv.memories), path("v1/memories/scan/", mv.scan_history),
+    path("v1/memories/<uuid:pk>/", mv.memories),
     path("v1/capabilities/", cv.capabilities), path("v1/preferences/", cv.preferences),
     path("v1/local/voice/", lv.voice_window),
+    path('v1/local/screen/',lv.screen_window),
     path("v1/local/startup/", lv.startup),
     path("v1/commands/", cv.command_collection), path("v1/commands/<uuid:pk>/", cv.command_collection),
     path("v1/commands/cancel/", cv.cancel_command), path("v1/commands/by-request/<str:request_id>/", cv.command_by_request),

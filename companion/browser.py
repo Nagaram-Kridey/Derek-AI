@@ -10,7 +10,7 @@ import subprocess
 from .policy import ApprovalRequired, AttentionRequired, DomainPolicy, PolicyError, RISKS, detect_risk
 
 MUTATIONS = {"fill", "click", "select"}
-ACTIONS = MUTATIONS | {"navigate", "read"}
+ACTIONS = MUTATIONS | {"navigate", "read", "wait", "scroll"}
 CHALLENGE = re.compile(r"verify (?:that )?you(?: are|'re) (?:a )?human|captcha|enter (?:the |your )?(?:verification|authentication|security) code|two.factor authentication|multi.factor authentication", re.I)
 
 
@@ -37,9 +37,38 @@ def target_risk(target, action):
     return detected or (declared if declared != "normal" else None)
 
 
+def resolve_target(page, action):
+    """Exact semantic locators survive layout changes without guessing a target."""
+    selector, target = action.get("selector"), action.get("target")
+    if selector and target:
+        raise PolicyError("Choose either selector or semantic target.")
+    if target is None:
+        if selector is None and action.get("type") == "read":
+            selector = "body"
+        if not isinstance(selector, str) or not selector.strip():
+            raise PolicyError("A unique selector or semantic target is required.")
+        return page.locator(selector)
+    if not isinstance(target, dict) or set(target) - {"by", "value", "name"}:
+        raise PolicyError("Invalid semantic target.")
+    by, value, name = target.get("by"), target.get("value"), target.get("name")
+    if not isinstance(value, str) or not 1 <= len(value) <= 500:
+        raise PolicyError("Semantic targets need bounded nonempty text.")
+    if by == "role":
+        if not isinstance(name, str) or not 1 <= len(name) <= 500:
+            raise PolicyError("Role targets require an exact accessible name.")
+        return page.get_by_role(value, name=name, exact=True)
+    if name is not None:
+        raise PolicyError("Only role targets accept name.")
+    methods = {"label": page.get_by_label, "text": page.get_by_text,
+               "placeholder": page.get_by_placeholder, "test_id": page.get_by_test_id}
+    if by not in methods:
+        raise PolicyError("Unknown semantic locator type.")
+    return methods[by](value, **({} if by == "test_id" else {"exact": True}))
+
+
 def execute_actions(page, actions, domains, *, start=0, approved_risk=None, before_mutation=lambda i: None, checkpoint=lambda i: None, observations=None, check_interrupt=lambda: None):
-    if not isinstance(actions, list) or not 1 <= len(actions) <= 50:
-        raise PolicyError("Browser workflows need 1 to 50 typed actions.")
+    if not isinstance(actions, list) or not 1 <= len(actions) <= 30:
+        raise PolicyError("Browser workflows need 1 to 30 typed actions.")
     if not 0 <= start <= len(actions):
         raise PolicyError("Invalid browser checkpoint.")
     observations = observations if observations is not None else []
@@ -58,22 +87,36 @@ def execute_actions(page, actions, domains, *, start=0, approved_risk=None, befo
                 raise AttentionRequired("Navigation reached an unexpected page.")
         else:
             text = check_page(page, domains)
-            if kind == "read":
-                target = page.locator(action.get("selector", "body"))
+            target = resolve_target(page, action)
+            if kind == "wait":
+                timeout = action.get("timeout_ms", 10000)
+                if type(timeout) is not int or not 100 <= timeout <= 30000:
+                    raise PolicyError("Wait timeout must be 100 to 30000 milliseconds.")
+                target.wait_for(state="visible", timeout=timeout)
+                check_interrupt()
+                text = check_page(page, domains)
+            if kind in {"read", "wait", "scroll"}:
+                if action.get("expected_url"):
+                    domains.check(action["expected_url"])
+                    if page.url != action["expected_url"]:
+                        raise AttentionRequired("The page URL differs from the reviewed workflow.")
+                if action.get("expected_text") and action["expected_text"] not in text:
+                    raise AttentionRequired("The expected page text was not found.")
                 if target.count() != 1 or not target.is_visible():
-                    raise AttentionRequired("Read selector must identify exactly one visible element.")
+                    raise AttentionRequired("The target must identify exactly one visible element.")
+            if kind == "read":
                 observations.append({"action": index, "url": page.url, "text": target.inner_text(timeout=10_000)[:20_000]})
-            else:
+            elif kind == "scroll":
+                target.scroll_into_view_if_needed(timeout=10_000)
+                check_interrupt()
+                check_page(page, domains)
+            elif kind in MUTATIONS:
                 expected_url, expected_text = action.get("expected_url"), action.get("expected_text")
                 if not isinstance(expected_url, str) or not isinstance(expected_text, str) or not expected_text.strip():
                     raise PolicyError("Mutating actions require expected_url and nonempty expected_text.")
                 domains.check(expected_url)
                 if page.url != expected_url or expected_text not in text:
                     raise AttentionRequired("The current page differs from the reviewed workflow. No action was taken.")
-                selector = action.get("selector")
-                if not isinstance(selector, str) or not selector:
-                    raise PolicyError("Mutating actions require a selector.")
-                target = page.locator(selector)
                 if target.count() != 1 or not target.is_visible() or not target.is_enabled():
                     raise AttentionRequired("The action target must be unique, visible, and enabled.")
                 risk = target_risk(target, action)

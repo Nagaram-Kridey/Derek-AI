@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Api, errorMessage, safeHttpUrl } from './api';
+import { MemoryPanel } from './Memory';
 import type { CalendarEvent, Device, SystemStatus } from './types';
 import { Badge, ErrorNotice, Icon, JsonDetails, dateLabel, useResource } from './ui';
 
@@ -45,6 +46,7 @@ export function Settings({
   return (
     <div className="stack">
       <ErrorNotice message={error || devices.error} />
+      <MemoryPanel api={api} refresh={refresh} changed={changed} />
       {status?.runtime?.managed && (
         <section className="panel">
           <div className="section-heading">
@@ -55,6 +57,8 @@ export function Settings({
             <Badge status="running locally" />
           </div>
           <p className="muted">{status.runtime.note}</p>
+          <div className="list-row"><strong>Local supervisor</strong><Badge status={status.runtime.supervisor_status || 'unknown'} /></div>
+          {Object.entries(status.runtime.issues || {}).map(([component, category]) => <p className="error-text" key={component}>{component.replaceAll('_', ' ')} needs attention ({category}). Other healthy services continue running.</p>)}
           <div className="list-row">
             <div>
               <strong>Start at Windows sign-in</strong>
@@ -62,12 +66,14 @@ export function Settings({
             </div>
             <button
               className="button secondary small"
-              disabled={busy || status.runtime.start_at_login === undefined}
-              onClick={() =>
-                perform(() => api.post('/v1/local/startup/', { enabled: !status.runtime?.start_at_login }))
-              }
+              disabled={busy || typeof status.runtime.start_at_login !== 'boolean'}
+              onClick={() => {
+                const enabled = status.runtime?.start_at_login;
+                if (typeof enabled !== 'boolean') return;
+                void perform(() => api.post('/v1/local/startup/', { enabled: !enabled }));
+              }}
             >
-              {status.runtime.start_at_login === undefined
+              {typeof status.runtime.start_at_login !== 'boolean'
                 ? 'Checking…'
                 : status.runtime.start_at_login
                   ? 'Turn off'
@@ -102,20 +108,21 @@ export function Settings({
           </div>
           <div className="list-row">
             <div>
-              <strong>Local database snapshot</strong>
+              <strong>Local recovery backup</strong>
               <p className="muted">
                 {status.runtime.backup?.created_at
                   ? `${dateLabel(status.runtime.backup.created_at)} · ${status.runtime.backup.encrypted ? 'Encrypted with your existing credential key' : 'Local file copy'}`
                   : 'The launcher will create a snapshot shortly.'}
               </p>
               <small>
-                Normal assistant database only; report files and private local chat are separate. This is not
-                an off-device backup.
+                {status.runtime.backup?.format === 1 ? 'Normal assistant database and referenced reports. Private local chat and browser sessions are excluded.' : 'Legacy database snapshot; report files and private local chat are separate.'} This is not an off-device backup.
               </small>
+              {status.runtime.backup?.verified && <p className="muted">Isolated restore verified · {status.runtime.backup.files} files checked. No restored jobs were started.</p>}
               {status.runtime.backup?.reason && <p className="error-text">{status.runtime.backup.reason}</p>}
             </div>
             <Badge status={status.runtime.backup?.status || 'pending'} />
           </div>
+          <div className="list-row"><div><strong>Screen observation</strong><p className="muted">Open a local consent window to preview one app’s accessible controls. No screenshots, model uploads or mouse input.</p></div><button className="button secondary small" disabled={busy || status.runtime.supervisor_status !== 'running'} onClick={() => perform(() => api.post('/v1/local/screen/',{}))}>Open local preview</button></div>
         </section>
       )}
       <section className="panel">
@@ -149,8 +156,9 @@ export function Settings({
         <h2>Connections</h2>
         {status?.language_model && (
           <p className="muted">
-            Background / installation model: {status.language_model.model} ({status.language_model.provider}).
-            Search: {status.language_model.web_search}. Choose the model for new conversations on the Features
+            Chat / tool selection: {status.language_model.model} ({status.language_model.provider}).
+            {status.language_model.research_model && <> Research planning / verification / reports: {status.language_model.research_model}.</>}
+            {' '}Search: {status.language_model.web_search}. Choose the model for new conversations on the Features
             page. Local generation requires Ollama and enough free RAM on the service PC.
           </p>
         )}
@@ -162,6 +170,8 @@ export function Settings({
                   ? 'Gemini'
                   : key === 'ollama'
                     ? 'Ollama (local)'
+                    : key === 'freellmapi'
+                      ? 'FreeLLMAPI router'
                     : key === 'cartesia'
                       ? 'Speech'
                       : key === 'calendar'

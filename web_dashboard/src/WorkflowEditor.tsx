@@ -148,6 +148,7 @@ export function WorkflowEditor({
         {advanced ? (
           <label>
             Workflow definition
+            <small>Browser steps support exact button names and field labels, bounded waits and scrolling. Every write needs the reviewed page URL and expected text.</small>
             <textarea
               className="code-editor"
               rows={17}

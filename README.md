@@ -2,7 +2,7 @@
 
 Source repository: [Nagaram-Kridey/Derek-AI](https://github.com/Nagaram-Kridey/Derek-AI).
 
-A personal assistant with a Django API, React dashboard, durable schedules and a Windows companion for approved file and browser workflows. Choose Gemini for hosted generation/Google grounding, or Ollama for local generation with separate public web search. Google Calendar, Telegram and Cartesia are optional connected services. See [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) for current implementation and verification status.
+A personal assistant with a Django API, React dashboard, durable schedules and a Windows companion for approved file and browser workflows. Choose Gemini, local Ollama or the configured FreeLLMAPI router. Google Calendar, Telegram and Cartesia are optional connected services. [Model roles and data flow](DEREK_MODEL_AND_DATA_FLOW.md) explains context and storage; [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) records current implementation and verification status.
 
 ## Use the local Windows app
 
@@ -12,6 +12,8 @@ The managed local runtime serves the built dashboard with Waitress and runs sepa
 
 - **Today:** next routines, unread updates and current service health.
 - **Chat and Command history:** persistent conversations, explicit model choice, saved outcomes, stop/retrieve controls and exact confirmation cards.
+- **Shared memory:** say “Remember label: detail” across normal web, Telegram or voice chats. Settings → Memory provides review, corrections, pinning, pause and forget controls. [Memory guide](MEMORY.md).
+- **Answer detail and shared controls:** use `/style auto|brief|balanced|detailed` and `/controls` in web chat or Telegram. Workflow/run/report controls use exact confirmations and the same operation handlers as the dashboard. [Usage and control matrix](MODEL_USAGE_AND_CONTROLS.md).
 - **Automations:** reviewed workflows, editable reminders, selected weekdays and execution history.
 - **Reports:** progress, cancellation, readable evidence/project shortlists, PDF/DOCX downloads and explicit Telegram delivery copies.
 - **Voice:** Ctrl+Alt+Space opens the native voice window; choose Listen to arm the microphone. Settings also opens online or private voice. See [VOICE_SETUP.md](VOICE_SETUP.md).
@@ -160,3 +162,8 @@ npm run build
 Tests use mocked providers and temporary files. GitHub Actions also runs against PostgreSQL, builds the dashboard, and validates Terraform. CI execution requires pushing this project to your repository; local checks do not imply CI has run.
 
 See [infra/aws/README.md](infra/aws/README.md) for EC2/RDS/ElastiCache/S3 deployment. Live checks need your credentials, account authorizations, HTTPS/DNS and an online desktop. The health endpoint checks the database; inspect Settings/Activity and container logs for background worker and provider readiness. Histories remain until deleted. S3 prior versions and RDS backups expire separately according to their configured retention.
+# Roadmap access
+
+Open **Roadmap** in the local dashboard for the saved owner board. Read [the full product roadmap](PRODUCT_ROADMAP.md) and [mobile access notes](ROADMAP_MOBILE.md). The [portable mobile board](https://nagaram-kridey.github.io/Derek-AI/) contains a public snapshot with browser-local drafts; it does not control the laptop.
+
+Desktop launcher sign-in and the opt-in local screen observation preview are documented in [DESKTOP_ACCESS_SETUP.md](DESKTOP_ACCESS_SETUP.md). The preview does not enable mouse input or send window content to a model.

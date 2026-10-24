@@ -41,19 +41,25 @@ def capabilities(request):
 def preferences(request):
     row = owner_preferences(request.user)
     if request.method == "PATCH":
-        if set(request.data) - {"interactive_profile"}:
-            raise ValueError(
-                "Only interactive_profile can currently be changed here. Voice preferences arrive with the voice update."
-            )
-        profile = request.data.get("interactive_profile")
-        if profile not in {"gemini", "configured"}:
+        if not request.data or set(request.data) - {"interactive_profile", "response_detail"}:
+            raise ValueError("Choose interactive_profile and/or response_detail.")
+        if "interactive_profile" in request.data and (not isinstance(request.data["interactive_profile"], str) or request.data["interactive_profile"] not in {"gemini", "configured"}):
             raise ValueError("Choose gemini or configured.")
-        row.interactive_profile = profile
-        row.save(update_fields=["interactive_profile"])
-        audit(request.user, "preferences.updated", interactive_profile=profile)
+        from .chat_policy import DETAILS
+        if "response_detail" in request.data and (not isinstance(request.data["response_detail"], str) or request.data["response_detail"] not in DETAILS):
+            raise ValueError("Choose auto, brief, balanced or detailed.")
+        if "interactive_profile" in request.data:
+            row.interactive_profile = request.data["interactive_profile"]
+            row.save(update_fields=["interactive_profile"])
+            audit(request.user, "preferences.updated", interactive_profile=row.interactive_profile)
+        if "response_detail" in request.data:
+            from .conversation_controls import set_detail
+            set_detail(request.user, request.data["response_detail"])
+            row.refresh_from_db()
     return Response(
         {
             "interactive_profile": row.interactive_profile,
+            "response_detail": row.response_detail,
             "profiles": [
                 profile_details(request.user, value)
                 for value in ("gemini", "configured")

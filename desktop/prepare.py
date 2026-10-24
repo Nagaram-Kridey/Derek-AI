@@ -1,12 +1,31 @@
 """Prepare only the configured database before starting the local runtime."""
 
-from datetime import datetime, timezone
 import os
 from pathlib import Path
 import sqlite3
 import sys
 
 from .state import ROOT
+
+
+def prepare_sqlite(connection, settings, backup_folder):
+    """Finish recovery preparation before the caller applies any migrations."""
+    from django.db.migrations.executor import MigrationExecutor
+    database = settings.DATABASES['default']
+    if database['ENGINE'] != 'django.db.backends.sqlite3' or str(database['NAME']) == ':memory:':
+        return
+    source = Path(database['NAME']).resolve()
+    if not source.exists():
+        return
+    executor = MigrationExecutor(connection)
+    plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
+    if plan and 'assistant_report' in connection.introspection.table_names():
+        from .recovery import create_archive, verify_archive
+        archive, _ = create_archive(source, settings.MEDIA_ROOT, backup_folder, settings.CREDENTIAL_ENCRYPTION_KEY)
+        verify_archive(archive, settings.CREDENTIAL_ENCRYPTION_KEY)
+    connection.close()
+    with sqlite3.connect(source, timeout=30) as original:
+        original.execute('PRAGMA journal_mode=WAL')
 
 
 def main():
@@ -18,34 +37,7 @@ def main():
     from django.conf import settings
     from django.core.management import call_command
     from django.db import connection
-    from django.db.migrations.executor import MigrationExecutor
-
-    database = settings.DATABASES["default"]
-    if database["ENGINE"] == "django.db.backends.sqlite3":
-        source = Path(database["NAME"]).resolve()
-        if source.exists():
-            # Keep one backup per day and an additional pre-migration snapshot.
-            plan = MigrationExecutor(connection).migration_plan(
-                MigrationExecutor(connection).loader.graph.leaf_nodes()
-            )
-            folder = ROOT / ".companion" / "backups"
-            folder.mkdir(parents=True, exist_ok=True)
-            name = (
-                datetime.now(timezone.utc).strftime(
-                    "local-%Y%m%d" + ("-migration-%H%M%S" if plan else "")
-                )
-                + ".sqlite3"
-            )
-            backup = folder / name
-            if not backup.exists():
-                with (
-                    sqlite3.connect(source) as original,
-                    sqlite3.connect(backup) as target,
-                ):
-                    original.backup(target)
-            connection.close()
-            with sqlite3.connect(source, timeout=30) as original:
-                original.execute("PRAGMA journal_mode=WAL")
+    prepare_sqlite(connection, settings, ROOT / '.companion/backups')
     call_command("migrate", interactive=False, verbosity=0)
     # Ensure a state row exists before lane queries use its paused flag.
     from django.contrib.auth import get_user_model

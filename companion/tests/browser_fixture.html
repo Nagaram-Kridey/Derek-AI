@@ -1,0 +1,8 @@
+<!doctype html><html lang="en"><body><h1>Automation test page</h1>
+<label for="project">Project name</label><input id="project">
+<label for="priority">Priority</label><select id="priority"><option value="normal">Normal</option><option value="high">High</option></select>
+<button onclick="document.getElementById('result').textContent='Saved locally'">Save project</button>
+<button onclick="document.getElementById('result').textContent='BAD PAYMENT'">Pay now</button>
+<div style="height:1500px"></div><div id="result" data-testid="result">Not saved</div>
+<script>setTimeout(()=>{let e=document.createElement('p');e.textContent='Ready for work';document.body.append(e)},200);</script>
+</body></html>

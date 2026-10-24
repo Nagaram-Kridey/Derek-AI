@@ -16,4 +16,9 @@ def create_gateway(profile=None):
         from .ollama import OllamaGateway
         return OllamaGateway(settings.OLLAMA_BASE_URL, settings.OLLAMA_MODEL,
                              settings.OLLAMA_TIMEOUT_SECONDS, settings.OLLAMA_NUM_CTX)
-    raise ConfigError("MODEL_PROVIDER must be gemini or ollama.")
+    if provider == "freellmapi":
+        from .freellmapi import FreeLLMAPIGateway
+        return FreeLLMAPIGateway(settings.FREELLMAPI_BASE_URL, settings.FREELLMAPI_API_KEY,
+                                settings.FREELLMAPI_MODEL, settings.FREELLMAPI_TIMEOUT_SECONDS,
+                                settings.FREELLMAPI_REASONING_EFFORT, settings.FREELLMAPI_RESEARCH_MODEL)
+    raise ConfigError("MODEL_PROVIDER must be gemini, ollama or freellmapi.")

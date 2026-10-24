@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1040" viewBox="0 0 1280 1040">
+<rect width="1280" height="1040" fill="#102b29"/>
+<text x="50" y="65" fill="#eff7ef" font-family="sans-serif" font-size="34">DEREK / PRODUCT ROADMAP</text>
+<text x="50" y="98" fill="#b7d1c8" font-family="sans-serif" font-size="17">October 24, 2026 • Code present ≠ live verified • Future items are proposals</text>
+<rect x="50" y="135" width="580" height="200" rx="15" fill="#21453f"/>
+<text x="70" y="168" fill="#c7ef9d" font-family="sans-serif" font-size="22">1 Foundation</text>
+<text x="70" y="196" fill="#eff7ef" font-family="sans-serif" font-size="15">Authenticated API and saved conversations</text>
+<text x="70" y="218" fill="#eff7ef" font-family="sans-serif" font-size="15">Web dashboard and command history</text>
+<rect x="660" y="135" width="580" height="200" rx="15" fill="#21453f"/>
+<text x="680" y="168" fill="#c7ef9d" font-family="sans-serif" font-size="22">2 Intelligence</text>
+<text x="680" y="196" fill="#eff7ef" font-family="sans-serif" font-size="15">Gemini, Ollama and FreeLLMAPI routing</text>
+<text x="680" y="218" fill="#eff7ef" font-family="sans-serif" font-size="15">Adaptive answer depth and recent context</text>
+<text x="680" y="240" fill="#eff7ef" font-family="sans-serif" font-size="15">Cross-channel long-term memory</text>
+<text x="680" y="262" fill="#eff7ef" font-family="sans-serif" font-size="15">Public and academic research</text>
+<text x="680" y="284" fill="#eff7ef" font-family="sans-serif" font-size="15">DOCX and PDF reports</text>
+<rect x="50" y="355" width="580" height="200" rx="15" fill="#21453f"/>
+<text x="70" y="388" fill="#c7ef9d" font-family="sans-serif" font-size="22">3 Actions</text>
+<text x="70" y="416" fill="#eff7ef" font-family="sans-serif" font-size="15">Reminders and scheduled workflows</text>
+<text x="70" y="438" fill="#eff7ef" font-family="sans-serif" font-size="15">11 AM enterprise AI project research</text>
+<text x="70" y="460" fill="#eff7ef" font-family="sans-serif" font-size="15">Google Calendar connector</text>
+<text x="70" y="482" fill="#eff7ef" font-family="sans-serif" font-size="15">Reviewed workflow drafts and controls</text>
+<text x="70" y="504" fill="#eff7ef" font-family="sans-serif" font-size="15">Approved local file tasks</text>
+<text x="70" y="526" fill="#eff7ef" font-family="sans-serif" font-size="15">Browser automation with semantic targets</text>
+<rect x="660" y="355" width="580" height="200" rx="15" fill="#21453f"/>
+<text x="680" y="388" fill="#c7ef9d" font-family="sans-serif" font-size="22">4 Channels</text>
+<text x="680" y="416" fill="#eff7ef" font-family="sans-serif" font-size="15">Telegram chat, voice notes and delivery</text>
+<text x="680" y="438" fill="#eff7ef" font-family="sans-serif" font-size="15">Desktop voice and hotkey</text>
+<text x="680" y="460" fill="#eff7ef" font-family="sans-serif" font-size="15">Private local chat and voice</text>
+<rect x="50" y="575" width="580" height="200" rx="15" fill="#21453f"/>
+<text x="70" y="608" fill="#c7ef9d" font-family="sans-serif" font-size="22">5 Local product</text>
+<text x="70" y="636" fill="#eff7ef" font-family="sans-serif" font-size="15">Local tray, workers and startup</text>
+<text x="70" y="658" fill="#eff7ef" font-family="sans-serif" font-size="15">Automatic local desktop sign-in</text>
+<text x="70" y="680" fill="#eff7ef" font-family="sans-serif" font-size="15">Scoped screen observation</text>
+<text x="70" y="702" fill="#eff7ef" font-family="sans-serif" font-size="15">Reviewed mouse and desktop actions</text>
+<text x="70" y="724" fill="#eff7ef" font-family="sans-serif" font-size="15">Visual task execution loop</text>
+<text x="70" y="746" fill="#eff7ef" font-family="sans-serif" font-size="15">Streaming text and speech</text>
+<text x="70" y="765" fill="#b7d1c8" font-family="sans-serif" font-size="13">+ 2 more blocks in the interactive roadmap</text>
+<rect x="660" y="575" width="580" height="200" rx="15" fill="#21453f"/>
+<text x="680" y="608" fill="#c7ef9d" font-family="sans-serif" font-size="22">6 Release</text>
+<text x="680" y="636" fill="#eff7ef" font-family="sans-serif" font-size="15">Backup, restore and recovery</text>
+<text x="680" y="658" fill="#eff7ef" font-family="sans-serif" font-size="15">Signed Windows installer and updates</text>
+<text x="680" y="680" fill="#eff7ef" font-family="sans-serif" font-size="15">AWS service while laptop sleeps</text>
+<rect x="50" y="795" width="580" height="200" rx="15" fill="#21453f"/>
+<text x="70" y="828" fill="#c7ef9d" font-family="sans-serif" font-size="22">7 Extensions</text>
+<text x="70" y="856" fill="#eff7ef" font-family="sans-serif" font-size="15">Phone call commands via gateway</text>
+<text x="70" y="878" fill="#eff7ef" font-family="sans-serif" font-size="15">Custom trained model adapter</text>
+<text x="70" y="900" fill="#eff7ef" font-family="sans-serif" font-size="15">Repeatable model quality benchmarks</text>
+<text x="70" y="922" fill="#eff7ef" font-family="sans-serif" font-size="15">Disposable integration test runner</text>
+<text x="70" y="944" fill="#eff7ef" font-family="sans-serif" font-size="15">Runtime feature flags and rollback</text>
+<text x="70" y="966" fill="#eff7ef" font-family="sans-serif" font-size="15">Additional direct account connectors</text>
+<text x="70" y="985" fill="#b7d1c8" font-family="sans-serif" font-size="13">+ 2 more blocks in the interactive roadmap</text>
+<text x="50" y="1020" fill="#b7d1c8" font-family="sans-serif" font-size="16">Next: runtime acceptance → desktop access → recovery / release → optional cloud and phone</text>
+</svg>

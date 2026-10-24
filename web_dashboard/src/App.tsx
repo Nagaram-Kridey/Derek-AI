@@ -3,20 +3,26 @@ import type { FormEvent, ReactNode } from 'react';
 import { Api, errorMessage } from './api';
 import { Automations } from './Automations';
 import { Chat } from './Chat';
+import { Roadmap } from './Roadmap';
 import { Features } from './Features';
 import { Settings } from './Workspace';
 import { Activity } from './Activity';
 import { Home } from './Home';
 import { Commands } from './Commands';
 import { ReportLibrary } from './Reports';
+import { desktopLaunchCode, exchangeDesktopLaunch } from './desktopSession';
 import type { SystemStatus } from './types';
 import { Badge, Brand, ErrorNotice, Icon, useResource } from './ui';
 import type { IconName } from './ui';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
+const candidateDesktopCode = desktopLaunchCode(window.location.hash);
+const desktopCode = window.location.origin === 'http://127.0.0.1:8000' && !API_BASE ? candidateDesktopCode : null;
+if (candidateDesktopCode) window.history.replaceState(null, '', window.location.pathname + window.location.search + '#home');
 type Session = { token: string; username: string; remember?: boolean };
-type Page = 'home' | 'chat' | 'automations' | 'reports' | 'activity' | 'settings' | 'features' | 'commands';
+type Page = 'roadmap' | 'home' | 'chat' | 'automations' | 'reports' | 'activity' | 'settings' | 'features' | 'commands';
 const pages: { key: Page; name: string; icon: IconName; subtitle: string }[] = [
+  { key: 'roadmap', name: 'Roadmap', icon: 'spark', subtitle: 'Features, priorities and evidence.' },
   {
     key: 'home',
     name: 'Today',
@@ -73,10 +79,10 @@ function readSession(): Session | null {
   }
 }
 
-function Login({ onLogin }: { onLogin: (session: Session) => void }) {
+function Login({ onLogin, notice }: { onLogin: (session: Session) => void; notice?: string }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(notice || null);
   const [busy, setBusy] = useState(false);
   const [remember, setRemember] = useState(false);
   async function submit(event: FormEvent) {
@@ -324,6 +330,7 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
           {page === 'automations' && <Automations api={api} refresh={refresh} changed={changed} />}{' '}
           {page === 'reports' && <ReportLibrary api={api} refresh={refresh} changed={changed} />}{' '}
           {page === 'activity' && <Activity api={api} refresh={refresh} changed={changed} />}{' '}
+          <div hidden={page !== 'roadmap'}><Roadmap api={api} /></div>
           {page === 'features' && <Features api={api} refresh={refresh} changed={changed} />}{' '}
           {page === 'settings' && (
             <Settings api={api} refresh={refresh} changed={changed} status={status.data} />
@@ -363,7 +370,9 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string |
 }
 
 export default function App() {
-  const [session, setSession] = useState<Session | null>(readSession);
+  const [session, setSession] = useState<Session | null>(() => desktopCode ? null : readSession());
+  const [connecting, setConnecting] = useState(Boolean(desktopCode));
+  const [desktopError, setDesktopError] = useState('');
   const login = useCallback((session: Session) => {
     try {
       sessionStorage.setItem('lilyleo.session', JSON.stringify(session));
@@ -391,9 +400,18 @@ export default function App() {
     }
     setSession(null);
   }, []);
+  useEffect(() => {
+    if (!desktopCode) return;
+    let active = true;
+    exchangeDesktopLaunch(new Api(''), desktopCode)
+      .then(value => { if (active) login(value); })
+      .catch(() => { if (active) setDesktopError('Desktop sign-in expired or was revoked. Close this Derek window and reopen from the tray, or sign in below.'); })
+      .finally(() => { if (active) setConnecting(false); });
+    return () => { active = false; };
+  }, [login]);
   return (
     <ErrorBoundary>
-      {session ? <Workspace session={session} onLogout={logout} /> : <Login onLogin={login} />}
+      {connecting ? <main className="crash"><Brand /><p>Connecting your desktop session…</p></main> : session ? <Workspace session={session} onLogout={logout} /> : <Login onLogin={login} notice={desktopError} />}
     </ErrorBoundary>
   );
 }

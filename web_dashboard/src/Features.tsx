@@ -37,20 +37,20 @@ export function Features({ api, refresh, changed }: { api: Api; refresh: number;
     '/v1/capabilities/',
     refresh,
   );
-  const preferences = useResource<{ interactive_profile: string; profiles: Profile[]; note: string }>(
+  const preferences = useResource<{ interactive_profile: string; response_detail: string; profiles: Profile[]; note: string }>(
     api,
     '/v1/preferences/',
     refresh,
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  async function choose(profile: string) {
+  async function choose(profile: string, field = 'interactive_profile') {
     setBusy(true);
     setError(null);
     try {
       await api.request('/v1/preferences/', {
         method: 'PATCH',
-        body: JSON.stringify({ interactive_profile: profile }),
+        body: JSON.stringify({ [field]: profile }),
       });
       changed();
     } catch (error) {
@@ -85,6 +85,15 @@ export function Features({ api, refresh, changed }: { api: Api; refresh: number;
               </select>
             </label>
             <p className="muted">{preferences.data.note}</p>
+            <label>
+              Answer detail across chats
+              <select value={preferences.data.response_detail} disabled={busy}
+                onChange={(event) => choose(event.target.value, 'response_detail')}>
+                <option value="auto">Adaptive · follow the question and recent context</option>
+                <option value="brief">Brief</option><option value="balanced">Balanced</option><option value="detailed">Detailed</option>
+              </select>
+            </label>
+            <small>Shared with Telegram and online voice. An explicit request overrides this preference; Telegram keeps each bubble short. You can also use /style in chat.</small>
             <p>{catalog.data?.profile.privacy}</p>
             <small>{catalog.data?.profile.reason}</small>
           </div>
@@ -108,8 +117,8 @@ export function Features({ api, refresh, changed }: { api: Api; refresh: number;
                 {item.location === 'laptop' ? 'Uses your laptop' : 'Uses the assistant service'}
                 {item.approval === 'confirm'
                   ? ' · Your confirmation is required'
-                  : item.approval.includes('workflow') || item.approval === 'dashboard_activation'
-                    ? ' · Review in Automations'
+                  : item.approval.includes('workflow') || item.approval === 'dashboard_activation' || item.approval === 'scope_review'
+                    ? ' · Review workflow permissions before activation'
                     : ''}
               </small>
             </section>

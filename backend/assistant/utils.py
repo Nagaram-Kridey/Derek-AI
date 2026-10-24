@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+import time
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -63,14 +64,21 @@ class BudgetGateway:
             if self.cancelled and self.cancelled():
                 raise RequestCancelled("Research cancelled.")
             pk = reserve_usage(self.user, len(json.dumps([args, kwargs], default=str)))
+            started = time.monotonic()
             try:
                 result = method(*args, **kwargs)
+                if name == "chat" and isinstance(result, dict):
+                    result["provider_latency_ms"] = round((time.monotonic() - started) * 1000)
                 if self.cancelled and self.cancelled():
                     raise RequestCancelled("Research cancelled.")
-                self._health(True)
+                if name != "grounded_search":
+                    self._health(True)
+                    if self.provider == "freellmapi" and self.gateway.last_routing:
+                        audit(self.user, "model.routed", operation=name, **self.gateway.last_routing)
                 return result
             except (ConfigError, ProviderError) as exc:
-                self._health(False, str(exc))
+                if name != "grounded_search":
+                    self._health(False, str(exc))
                 raise
             finally:
                 usage = self.gateway.last_usage
@@ -80,7 +88,10 @@ class BudgetGateway:
 
     def _health(self, succeeded, error=""):
         from .models import ModelHealth
-        model_name = settings.GEMINI_MODEL if self.provider == "gemini" else settings.OLLAMA_MODEL
+        model_name = {"gemini": settings.GEMINI_MODEL, "ollama": settings.OLLAMA_MODEL,
+                      "freellmapi": settings.FREELLMAPI_MODEL}.get(self.provider, "")
+        if self.provider == "freellmapi":
+            model_name = self.gateway.last_requested_model
         changes = {"last_success_at" if succeeded else "last_failure_at": timezone.now()}
         if not succeeded:
             changes["error"] = error[:1000]

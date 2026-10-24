@@ -6,6 +6,17 @@ from rest_framework.response import Response
 from .utils import audit
 
 
+@api_view(['POST'])
+def screen_window(request):
+    if not settings.LOCAL_EXECUTION:
+        return Response({'detail':'Screen preview requires the managed Windows app.'},status=409)
+    from desktop.supervisor import send_control
+    if not send_control('screen'):
+        return Response({'detail':'Screen preview could not open. Use the local tray after Derek starts.'},status=409)
+    audit(request.user,'screen.preview_opened')
+    return Response({'opened':True,'permission':'off_until_local_consent','input_enabled':False,'local_only':True})
+
+
 @api_view(["POST"])
 def voice_window(request):
     if not settings.LOCAL_EXECUTION:

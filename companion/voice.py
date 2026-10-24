@@ -14,7 +14,7 @@ from .journal import WorkerLock
 from .speech import speak
 from .voice_audio import Microphone, UtteranceDetector
 
-YES = {"yes", "confirm", "yes please", "confirm please"}
+YES = {"yes", "confirm", "yes please", "confirm please", "yeah", "yes confirm", "go ahead"}
 NO = {"no", "cancel", "no thanks", "cancel that"}
 STOP = {"stop", "stop speaking", "stop listening"}
 

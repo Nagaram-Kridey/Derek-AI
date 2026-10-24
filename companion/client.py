@@ -146,11 +146,13 @@ class APIClient:
                 return result["response"]
             if time.monotonic() >= deadline:
                 raise ClientError("Command still running. Use /retry to retrieve it or /stop to cancel it.")
+            elapsed = getattr(self.config, "turn_timeout_seconds", 120) - max(0, deadline - time.monotonic())
+            delay = 0.25 if elapsed < 2 else 0.5 if elapsed < 8 else 1.0
             if stop:
-                if stop.wait(1):
+                if stop.wait(delay):
                     raise TurnInterrupted("Voice turn interrupted.")
             else:
-                time.sleep(1)
+                time.sleep(delay)
             result = self.get(f"/v1/commands/{command_id}/", user=True)
 
     def cancel_turn(self):

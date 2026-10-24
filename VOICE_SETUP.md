@@ -1,8 +1,26 @@
 # Derek — Desktop voice setup
 
-Updated: 2026-10-18 (Asia/Kolkata)
+Updated: 2026-10-20 (Asia/Kolkata)
 
 Status: **Terminal and native-window voice implemented locally; live conversation, interruption and latency acceptance are pending.** Use Chat → Voice window, the tray, or Ctrl+Alt+Space to open the native window. Choose Listen to arm capture; Space starts/finishes/interrupts, Esc mutes. A Windows shortcut/launcher now runs the local app; a signed standalone installer, wake word and phone channel remain later work.
+
+## Scheduling by voice — 2026-10-20 correction
+
+Recent voice transcripts were recognized correctly. Scheduling failed because the routed model supplied invalid browser action fields (`action: open` or a bare URL instead of `actions: [{type: navigate, url: ...}]`) and sometimes claimed a reminder was saved without a tool call.
+
+The implementation now:
+
+- Locally parses common explicit reminders and daily website routines, then sends them through the existing validated proposal/draft path. Examples: “Remind me in 10 minutes to review code”, “Remind me to review code at 9 PM today”, and “Open the YouTube homepage at 9 PM every day”. This path needs no model call.
+- Keeps complex dates, multiple actions, uncertain times, channel/playlist targets and explicit timezone changes on the full typed-tool path. It does not silently choose AM/PM or enable workflows.
+- Publishes typed workflow argument schemas and an exact browser-navigation example to model providers. Invalid fields produce a concise actionable error; all-failed tool turns are marked failed.
+- Blocks the identified unsupported scheduling-completion claims when no tool ran.
+- Accepts “yeah”, “yes confirm” and “go ahead” only when the native voice client has a completely heard, unexpired exact proposal armed. Bare agreement cannot confirm a different/unheard proposal.
+
+**Reminder flow:** speak the request → hear the exact date/time/message → say **confirm** to save. A proposal is not a saved reminder.
+
+**Browser routine flow:** speak the request → Derek saves a **disabled workflow draft** → open Automations, review the website/schedule/actions and enable it. Voice agreement does not activate a browser workflow. The browser companion, laptop and scheduler must be available at run time.
+
+Reopen the voice window after the managed runtime reload so the updated confirmation vocabulary is loaded. Compilation and selected Ruff checks passed. No new automated tests, live microphone/model probes, task confirmations or workflow activations were performed for this correction.
 
 ## 1. Start the local services
 
@@ -22,7 +40,7 @@ Install the companion dependencies if setting up another machine:
 .\.venv\Scripts\python.exe -m pip install -r companion/requirements.txt
 ```
 
-The managed local app stores its desktop session token in Windows Credential Manager and refreshes it when you sign in. The existing `.env` user token is retained as a compatibility fallback; a device token only authorizes the browser/file worker. Cartesia and model settings still come from the ignored environment configuration. New conversations use the profile selected in Features, initially Gemini. Existing conversations retain their original profile. No automatic provider fallback occurs. The console remains available for setup:
+The managed local app stores its desktop session token in Windows Credential Manager and refreshes it when you sign in. The existing `.env` user token is retained as a compatibility fallback; a device token only authorizes the browser/file worker. Cartesia and model settings still come from the ignored environment configuration. New conversations use the profile selected in Features; this installation currently uses FreeLLMAPI auto:fast for conversation and auto:smart for research. Existing conversations retain their original profile. No automatic provider fallback occurs. The console remains available for setup:
 
 ```powershell
 .\.venv\Scripts\python.exe -m companion voice
@@ -85,6 +103,8 @@ Interrupted, failed or expired readbacks are disarmed. Ask for the change again 
 - Cancellation marks a durable request ID, suppresses late tool dispatch/results and attempts to abort active Gemini/Ollama inference. A provider may still bill work already accepted. A running non-mutating public-search/Calendar read may finish its bounded network operation; saved actions and queued reports continue according to their recorded state.
 
 ## Live acceptance remaining
+
+**2026-10-20 saved-reminder check:** the running voice client/API persisted a reminder only after the exact readback-confirmation gate. Reconfirming the same proposal produced no duplicate. Recognized speech and successful playback were simulated, so microphone/speaker behavior remains pending. The test reminder `ab73a271-23ec-4aa2-b692-cf1fe6600732` is preserved and paused in Automations (2026-10-21, 11:00 Asia/Kolkata). Automated tests also cover “confirm,” “yeah” and “go ahead” after a completed readback; unbound/expired/interrupted replies cannot authorize a task.
 
 - [ ] Ordinary greeting and follow-up retain context and produce audible replies.
 - [ ] Natural pauses and manual recording behave correctly with the selected microphone.

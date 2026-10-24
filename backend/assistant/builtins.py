@@ -1,17 +1,30 @@
 """Small read-only answers that do not need model inference or network access."""
 
 from datetime import timedelta
+import re
 from django.conf import settings
 from django.utils import timezone
 from . import models as m
 
 
+def display_name(command):
+    from .capabilities import preferences
+    if preferences(command.user).memory_enabled:
+        name = (m.PersonalMemory.objects.filter(user=command.user, key="profile.name", status="active")
+                .values_list("content", flat=True).first())
+        if name:
+            name = re.sub(r"^(?:my name is|call me)\s+", "", name, flags=re.I).strip().rstrip(".! ")
+            if re.fullmatch(r"[\w .'’-]{1,60}", name):
+                return name
+    return command.user.username
+
+
 def answer(command):
     text = command.input_text.casefold().strip().rstrip(".!?")
     if text == "/start":
-        return f"Hi, {command.user.username}. I'm Derek. Send a message or voice note; use /help for features and /new for a fresh conversation. Changes need your exact confirmation."
+        return f"Hi, {display_name(command)}. I'm Derek. Send a message or voice note; use /help for features and /new for a fresh conversation. Changes need your exact confirmation."
     if text in {"hi", "hello", "hey", "hi derek", "hello derek", "hey derek"}:
-        return f"Hi, {command.user.username}. What would you like a hand with?"
+        return f"Hi, {display_name(command)}. What would you like a hand with?"
     if text in {"/time", "what time is it", "what's the time", "current time"}:
         return (
             timezone.localtime().strftime("It is %I:%M %p on %A, %d %B %Y")
@@ -36,7 +49,7 @@ def answer(command):
         )[:30]
         return (
             "\n".join(
-                f"- **{task.name}** — {'active' if task.enabled else 'inactive'}; {_schedule_label(task.schedule)}."
+                f"- **{task.name}** — {'active' if task.enabled else 'inactive'}; {_schedule_label(task.schedule)}. ID: {task.id}"
                 for task in tasks
             )
             or "You have no scheduled routines yet. Add one in Automations, or ask me to prepare a reminder."
@@ -78,7 +91,7 @@ def answer(command):
             result += "\n\n**Unavailable or waiting for setup**\n" + "\n".join(
                 "- " + title for title in dict.fromkeys(unavailable)
             )
-        result += "\n\nUse Features for current connection/model details. The phone gateway, wake word and signed installer are still planned. Quick commands: `/tasks`, `/time`, `/date`, `/status`."
+        result += "\n\nUse Features for current connection/model details and answer detail. The phone gateway, wake word and signed installer are still planned. Quick commands: `/tasks`, `/time`, `/date`, `/status`, `/controls`. Use `/style auto|brief|balanced|detailed` to set shared answer detail."
         return result
     if text in {"/status", "assistant status", "are your services running"}:
         from .services import state

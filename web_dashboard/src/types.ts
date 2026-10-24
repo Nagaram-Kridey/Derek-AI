@@ -155,8 +155,10 @@ export type RuntimeStatus = {
   managed: boolean;
   stopping?: boolean;
   voice_shortcut?: string | null;
-  start_at_login?: boolean;
-  backup?: { status?: string; created_at?: string; encrypted?: boolean; bytes?: number; reason?: string };
+  start_at_login?: boolean | null;
+  supervisor_status?: string;
+  issues?: Record<string, string>;
+  backup?: { status?: string; created_at?: string; encrypted?: boolean; bytes?: number; reason?: string; verified?: boolean; files?: number; format?: number; scope?: string };
   note: string;
   services: { id: string; title: string; status: string; last_seen?: string; task_started_at?: string }[];
 };
@@ -191,7 +193,7 @@ export type SystemStatus = {
   active_commands?: number;
   pending_confirmations?: number;
   unread_notifications?: number;
-  language_model?: { provider: string; model: string; local: boolean; web_search: string };
+  language_model?: { provider: string; model: string; local: boolean; web_search: string; research_model?: string | null };
   usage?: unknown;
 };
 export type CalendarEvent = {

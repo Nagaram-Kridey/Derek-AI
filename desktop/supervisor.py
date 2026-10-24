@@ -17,17 +17,33 @@ import time
 from urllib.request import Request, urlopen
 import webbrowser
 
-from .state import ROOT, RUNTIME, write_record
+from .state import ROOT, RUNTIME, write_record as atomic_record
 
 log = logging.getLogger("derek.desktop")
 URL = "http://127.0.0.1:8000"
 CONTROL_PORT = 8766
+_record_warning_at = 0.0
+
+
+def write_record(name, value):
+    """A transient status-file failure must not stop supervising live workers."""
+    global _record_warning_at
+    try:
+        atomic_record(name, value)
+        return True
+    except OSError as exc:
+        if time.monotonic() >= _record_warning_at:
+            log.warning('Status record unavailable: component=%s category=%s', name, type(exc).__name__)
+            _record_warning_at = time.monotonic() + 60
+        return False
 
 
 def child_environment():
     from dotenv import load_dotenv
 
-    load_dotenv(ROOT / ".env", override=False)
+    # A managed restart inherits the previous launcher's environment. Reload
+    # owner configuration so a provider/key change in .env actually takes effect.
+    load_dotenv(ROOT / ".env", override=True)
     return {
         **os.environ,
         "PYTHONPATH": os.pathsep.join((str(ROOT / "backend"), str(ROOT))),
@@ -59,11 +75,14 @@ class Supervisor:
         self.open_page = open_page
         self.opened = False
         self.problem = None
+        self.issues = {}
+        self.drain_started = None
         self.icon = None
         self.hotkey = None
         self.voice_process = None
         self.voice_private = False
         self.workspace_process = None
+        self.screen_process = None
         self.backup_process = None
         self.next_backup_at = time.monotonic() + 60
         self.guard = threading.RLock()
@@ -97,6 +116,9 @@ class Supervisor:
             self.executables["ollama"] = executable
 
     def prepare(self):
+        from .router import ensure_router
+
+        ensure_router(self.env, ROOT)
         if not (ROOT / "backend/staticapp/index.html").exists():
             raise RuntimeError(
                 "Build the dashboard first with scripts/build-local.ps1. The local app needs no Node server after that."
@@ -137,7 +159,7 @@ class Supervisor:
             env=self.env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            timeout=120,
+            timeout=600,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
         if result.returncode:
@@ -196,9 +218,15 @@ class Supervisor:
             else 0,
         )
         stream.capture(process.stdout)
+        try:
+            if self.process_group:
+                self.process_group.add(process)
+        except Exception:
+            from .process_group import stop_spawned_process
+            stop_spawned_process(process)
+            stream.close()
+            raise
         self.processes[name] = process
-        if self.process_group:
-            self.process_group.add(process)
         write_record(name, {"status": "starting", "pid": process.pid, "mode": "local"})
         log.info("Started local service %s", name)
 
@@ -212,8 +240,11 @@ class Supervisor:
                 if self.stopping
                 else "needs_attention"
                 if self.problem
+                else "degraded"
+                if self.issues
                 else "running",
                 "problem": self.problem,
+                "issues": dict(self.issues),
                 "url": URL,
                 "stopping": self.stopping,
                 "voice_shortcut": "Ctrl+Alt+Space"
@@ -232,6 +263,7 @@ class Supervisor:
     def request_stop(self, restart=False):
         with self.guard:
             self.stopping, self.restarting = True, restart
+            self.drain_started = self.drain_started or time.monotonic()
             write_record("supervisor", self.status())
         log.info("Local runtime draining; restart=%s", restart)
 
@@ -267,10 +299,11 @@ class Supervisor:
                     / "workspace-profile"
                 )
                 profile.mkdir(parents=True, exist_ok=True)
+                from .session import workspace_url
                 self.workspace_process = subprocess.Popen(
                     [
                         str(executable),
-                        "--app=" + URL,
+                        "--app=" + workspace_url(),
                         "--user-data-dir=" + str(profile),
                         "--no-first-run",
                         "--no-default-browser-check",
@@ -295,6 +328,28 @@ class Supervisor:
         )
         if self.process_group:
             self.process_group.add(process)
+
+    def screen_window(self):
+        if self.stopping or self.problem or self.process_group is None:
+            return False
+        with self.guard:
+            if self.screen_process and self.screen_process.poll() is None:
+                from .hotkey import focus_process_window
+                focus_process_window(self.screen_process)
+                return True
+            keep={'PATH','SYSTEMROOT','WINDIR','USERPROFILE','LOCALAPPDATA','APPDATA','TEMP','TMP','PYTHONPATH','PYTHONUNBUFFERED'}
+            process=subprocess.Popen([str(Path(python_path()).with_name('pythonw.exe')),'-m','desktop.screen_window'],
+                cwd=ROOT,env={k:v for k,v in self.env.items() if k.upper() in keep},
+                stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+            try:
+                self.process_group.add(process)
+            except Exception:
+                from .process_group import stop_spawned_process
+                stop_spawned_process(process)
+                return False
+            self.screen_process=process
+            return True
 
     def voice_window(self, private=False):
         if self.stopping or self.problem or self.process_group is None:
@@ -404,6 +459,7 @@ class Supervisor:
                     "/restart",
                     "/voice",
                     "/private-voice",
+                    "/screen",
                     "/autostart-on",
                     "/autostart-off",
                 }:
@@ -411,6 +467,10 @@ class Supervisor:
                     return
                 if self.path == "/open":
                     owner.open_workspace()
+                elif self.path == '/screen':
+                    if not owner.screen_window():
+                        self.send_error(409)
+                        return
                 elif self.path in {"/voice", "/private-voice"}:
                     if not owner.voice_window(private=self.path == "/private-voice"):
                         self.send_error(409)
@@ -438,6 +498,87 @@ class Supervisor:
         except (OSError, ValueError):
             return False
 
+    def optional(self, name, action, *, clear=True):
+        """Quarantine maintenance/UI faults; retain monitoring and control server."""
+        try:
+            action()
+            if clear:
+                self.issues.pop(name, None)
+            return True
+        except Exception as exc:
+            category = type(exc).__name__
+            if self.issues.get(name) != category:
+                # Do not log exception text, local variables, URLs or credentials.
+                log.warning('Optional component failed: component=%s category=%s', name, category)
+            self.issues[name] = category
+            return False
+
+    def monitor_service(self, name, process):
+        if process is not None and process.poll() is None:
+            self.issues.pop('service_' + name, None)
+            if name == 'backend':
+                write_record(name, {'status': 'ready' if self.backend_ready() else 'starting', 'pid': process.pid, 'mode': 'local'})
+            elif name == 'ollama':
+                write_record(name, {'status': 'ready', 'pid': process.pid, 'mode': 'local'})
+            return
+        if name not in self.retry_at:
+            self.issues['service_' + name] = 'ServiceExited'
+            if name in self.logs:
+                self.logs[name].close()
+            self.failures[name] = self.failures.get(name, 0) + 1
+            self.retry_at[name] = time.monotonic() + min(60, 2 ** min(self.failures[name], 6))
+            write_record(name, {'status': 'recovering', 'mode': 'local', 'restarts': self.failures[name]})
+            log.warning('Local service %s exited; restart scheduled', name)
+        if time.monotonic() >= self.retry_at[name]:
+            # If relaunch fails, wait before retrying instead of tight looping.
+            self.retry_at[name] = time.monotonic() + 60
+            self.launch(name)
+            del self.retry_at[name]
+            self.issues.pop('service_' + name, None)
+
+    def maintain_backup(self):
+        if self.stopping:
+            return
+        if self.backup_process is not None:
+            result = self.backup_process.poll()
+            if result is None:
+                return
+            self.backup_process = None
+            if result:
+                self.next_backup_at = time.monotonic() + 15 * 60
+                self.issues['backup'] = 'BackupFailed'
+            else:
+                self.next_backup_at = time.monotonic() + 24 * 60 * 60
+                self.issues.pop('backup', None)
+        if time.monotonic() < self.next_backup_at:
+            return
+        # Launch failures retry after fifteen minutes; never stop service checks.
+        self.next_backup_at = time.monotonic() + 15 * 60
+        process = subprocess.Popen(
+            [python_path(), '-m', 'desktop.backup'], cwd=ROOT, env=self.env,
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            creationflags=(subprocess.CREATE_NO_WINDOW | subprocess.BELOW_NORMAL_PRIORITY_CLASS) if os.name == 'nt' else 0)
+        try:
+            if self.process_group:
+                self.process_group.add(process)
+        except Exception:
+            from .process_group import stop_spawned_process
+            stop_spawned_process(process)
+            raise
+        self.backup_process = process
+        self.issues.pop('backup_launcher', None)
+
+    def drain_complete(self):
+        # Worker protocols drain jobs. An idle voice window must not hold restart
+        # forever; after a bounded wait, cleanup stops the owned process group.
+        if self.drain_started is not None and time.monotonic() - self.drain_started >= 180:
+            log.warning('Drain deadline reached; stopping remaining owned processes. Durable job recovery applies on restart.')
+            return True
+        lanes = [p for name, p in self.processes.items() if name not in {'backend','ollama'}]
+        return (all(p.poll() is not None for p in lanes)
+                and (self.voice_process is None or self.voice_process.poll() is not None)
+                and (self.backup_process is None or self.backup_process.poll() is not None))
+
     def watch(self):
         try:
             # Keep stop/restart available even if a database/dependency check
@@ -452,7 +593,7 @@ class Supervisor:
             from .hotkey import VoiceHotkey
 
             self.hotkey = VoiceHotkey(self.voice_shortcut)
-            self.hotkey.start()
+            self.optional('hotkey', self.hotkey.start)
             write_record("supervisor", self.status())
             if "ollama" in self.services:
                 try:
@@ -466,109 +607,22 @@ class Supervisor:
                 except (OSError, ValueError):
                     pass
             for name in sorted(self.services, key=lambda name: name != "ollama"):
-                self.launch(name)
+                self.optional('service_' + name, lambda n=name: self.launch(n), clear=False)
             while not self.stop.wait(2):
                 with self.guard:
                     write_record("supervisor", self.status())
                     if self.stopping:
-                        lanes = [
-                            name
-                            for name in self.services
-                            if name not in {"backend", "ollama"}
-                        ]
-                        voice_finished = (
-                            self.voice_process is None
-                            or self.voice_process.poll() is not None
-                        )
-                        backup_finished = (
-                            self.backup_process is None
-                            or self.backup_process.poll() is not None
-                        )
-                        if (
-                            all(
-                                self.processes[name].poll() is not None
-                                for name in lanes
-                            )
-                            and voice_finished
-                            and backup_finished
-                        ):
+                        if self.drain_complete():
                             break
                     else:
-                        for name, process in list(self.processes.items()):
-                            if process.poll() is None:
-                                if name == "backend":
-                                    write_record(
-                                        name,
-                                        {
-                                            "status": "ready"
-                                            if self.backend_ready()
-                                            else "starting",
-                                            "pid": process.pid,
-                                            "mode": "local",
-                                        },
-                                    )
-                                elif name == "ollama":
-                                    write_record(
-                                        name,
-                                        {
-                                            "status": "ready",
-                                            "pid": process.pid,
-                                            "mode": "local",
-                                        },
-                                    )
-                                continue
-                            self.logs[name].close()
-                            if name not in self.retry_at:
-                                self.failures[name] = self.failures.get(name, 0) + 1
-                                self.retry_at[name] = time.monotonic() + min(
-                                    60, 2 ** min(self.failures[name], 6)
-                                )
-                                write_record(
-                                    name,
-                                    {
-                                        "status": "recovering",
-                                        "mode": "local",
-                                        "restarts": self.failures[name],
-                                    },
-                                )
-                                log.warning(
-                                    "Local service %s exited; restart scheduled", name
-                                )
-                            if time.monotonic() >= self.retry_at[name]:
-                                del self.retry_at[name]
-                                self.launch(name)
-                if not self.opened and self.open_page and self.backend_ready():
-                    self.open_workspace()
-                    self.opened = True
-                if (
-                    not self.stopping
-                    and time.monotonic() >= self.next_backup_at
-                    and (
-                        self.backup_process is None
-                        or self.backup_process.poll() is not None
-                    )
-                ):
-                    self.backup_process = subprocess.Popen(
-                        [python_path(), "-m", "desktop.backup"],
-                        cwd=ROOT,
-                        env=self.env,
-                        stdin=subprocess.DEVNULL,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        creationflags=(
-                            subprocess.CREATE_NO_WINDOW
-                            | subprocess.BELOW_NORMAL_PRIORITY_CLASS
-                        )
-                        if os.name == "nt"
-                        else 0,
-                    )
-                    self.next_backup_at = time.monotonic() + 24 * 60 * 60
-                    if self.process_group:
-                        self.process_group.add(self.backup_process)
+                        for name in list(self.services):
+                            self.optional('service_' + name, lambda n=name: self.monitor_service(n, self.processes.get(n)), clear=False)
+                if not self.stopping and not self.opened and self.open_page and self.backend_ready():
+                    self.opened = self.optional('workspace', self.open_workspace)
+                self.optional('backup_launcher', self.maintain_backup, clear=False)
                 if self.icon:
-                    self.icon.title = "Derek · " + (
-                        "Finishing current work" if self.stopping else "Running locally"
-                    )
+                    self.optional('tray', lambda: setattr(self.icon, 'title', 'Derek · ' + (
+                        'Finishing current work' if self.stopping else 'Needs attention' if self.issues else 'Running locally')))
         except Exception as exc:
             self.problem = (
                 str(exc)
@@ -576,7 +630,10 @@ class Supervisor:
                 else "Local startup needs attention. Check the runtime setup guide."
             )
             write_record("supervisor", self.status())
-            log.error("%s", self.problem)
+            import traceback
+            frames = traceback.extract_tb(exc.__traceback__)
+            location = f"{Path(frames[-1].filename).name}:{frames[-1].lineno}" if frames else 'unknown'
+            log.error('Supervisor failed: category=%s location=%s', type(exc).__name__, location)
             if self.icon:
                 with suppress(Exception):
                     self.icon.notify(self.problem, "Derek needs attention")
@@ -679,6 +736,7 @@ class Supervisor:
                 pystray.MenuItem(
                     "Private local chat", lambda *_: self.voice_console(private=True)
                 ),
+                pystray.MenuItem('Screen observation · local preview', lambda *_: self.screen_window()),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem(
                     "Start at Windows sign-in",

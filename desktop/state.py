@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import time
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNTIME = ROOT / ".companion" / "runtime"
@@ -30,7 +31,16 @@ def write_record(name, value):
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             json.dump(record, stream)
-        os.replace(temporary, RUNTIME / (name + ".json"))
+        # Windows readers/scanners can briefly deny replacement. Retry only
+        # sharing/access failures, keeping the old complete record intact.
+        for attempt in range(5):
+            try:
+                os.replace(temporary, RUNTIME / (name + ".json"))
+                break
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.02 * (attempt + 1))
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
@@ -56,7 +66,8 @@ def snapshot():
         value = read_record(name)
         try:
             age = (now - datetime.fromisoformat(value["updated_at"])).total_seconds()
-            fresh = 0 <= age < 30
+            # A daily completed backup is evidence, not a live process heartbeat.
+            fresh = 0 <= age < (26 * 60 * 60 if name == "backup" and value.get("status") == "ready" else 30)
         except (ValueError, KeyError, TypeError):
             fresh = False
         values[name] = {**value, "fresh": fresh}

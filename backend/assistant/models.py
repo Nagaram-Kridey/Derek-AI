@@ -3,6 +3,20 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+class RoadmapBoard(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    items = models.JSONField(default=list)
+    version = models.PositiveIntegerField(default=1)
+
+
+class DesktopLaunchGrant(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    digest = models.CharField(max_length=64, unique=True)
+    token_digest = models.CharField(max_length=64)
+    expires_at = models.DateTimeField()
+    consumed = models.BooleanField(default=False)
+
+
 class Owned(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -24,6 +38,37 @@ class AssistantPreferences(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     interactive_profile = models.CharField(max_length=24, default="gemini")
     telegram_voice_replies = models.BooleanField(default=False)
+    memory_enabled = models.BooleanField(default=True)
+    memory_suggestions = models.BooleanField(default=True)
+    response_detail = models.CharField(max_length=12, default="auto", choices=[(value, value) for value in ("auto", "brief", "balanced", "detailed")])
+
+class PersonalMemory(Owned):
+    key = models.CharField(max_length=100)
+    title = models.CharField(max_length=100)
+    content = models.CharField(max_length=500)
+    fingerprint = models.CharField(max_length=64)
+    status = models.CharField(max_length=16, default="suggested")
+    pinned = models.BooleanField(default=False)
+    version = models.PositiveIntegerField(default=1)
+    source_message = models.ForeignKey("Message", null=True, blank=True, on_delete=models.CASCADE)
+    updated_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "fingerprint"], name="unique_owner_memory_fact"),
+            models.UniqueConstraint(fields=["user", "key"], condition=models.Q(status="active"), name="unique_active_memory_key"),
+        ]
+        indexes = [models.Index(fields=["user", "status", "updated_at"], name="owner_memory_lookup")]
+
+class MemoryTerm(models.Model):
+    memory = models.ForeignKey(PersonalMemory, related_name="terms", on_delete=models.CASCADE)
+    token = models.CharField(max_length=40, db_index=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["memory", "token"], name="unique_memory_term")]
+
+class ForgottenMemory(Owned):
+    fingerprint = models.CharField(max_length=64)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "fingerprint"], name="unique_forgotten_memory")]
 
 class ChannelSession(Owned):
     channel = models.CharField(max_length=24)

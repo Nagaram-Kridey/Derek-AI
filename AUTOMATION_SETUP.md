@@ -1,6 +1,6 @@
 # Derek — automations on this laptop
 
-Updated: **2026-10-19 · Asia/Kolkata**
+Updated: **2026-10-20 · Asia/Kolkata**
 
 ## Start the assistant
 
@@ -30,7 +30,7 @@ Workflow ID: `a7401ae6-1640-4864-a8fc-bc9e38c42dd4`. Latest report: `fa72bc44-2f
 3. Review the displayed schedule; dates default to Asia/Kolkata.
 4. Save. Use Edit, Pause/Resume and History on the routine card afterward.
 
-A direct form save is your explicit instruction. Reminder/Calendar changes requested through chat or voice instead prepare an exact two-minute proposal: review and confirm that proposal. An unbound yes cannot approve an arbitrary pending action.
+A direct form save is your explicit instruction. Reminder/Calendar changes requested through chat or voice instead prepare an exact two-minute proposal: review and confirm that proposal. An unbound yes cannot approve an arbitrary pending action. Shared chat/Telegram controls now cover workflow review/enable/pause/run, global pause/resume, research/run cancellation, sensitive-step decisions and confirmed report copies: send `/controls`, or see [MODEL_USAGE_AND_CONTROLS.md](MODEL_USAGE_AND_CONTROLS.md). Large scope reviews still require the dashboard when the complete readback exceeds channel limits.
 
 ## Create or change a workflow
 
@@ -56,6 +56,31 @@ For manual website sign-in, quit the local runtime after current work first, the
 ```
 
 Finish manual sign-in, close all Derek login-profile windows, then reopen the desktop shortcut. The current browser channel is installed Chrome with a separate Derek profile. Simple YouTube navigation has prior evidence; full approved workflows and recovery still need live acceptance. See the browser setup section in [README.md](README.md).
+
+### Flexible browser targets
+
+Browser drafts support exact button names, field labels, visible text, placeholders and test IDs in addition to CSS selectors. `read` without a target reads the page body; `wait` waits for one visible element (100–30,000 milliseconds), and `scroll` brings one element into view. Duplicate matches pause instead of guessing. These are available through chat-generated drafts and the Automations advanced definition editor.
+
+Example browser step (replace the domain and page details with the actual site you reviewed):
+
+```json
+{
+  "tool": "browser.run",
+  "args": {
+    "actions": [
+      {"type": "navigate", "url": "https://your-approved-site.com/projects"},
+      {"type": "wait", "target": {"by": "label", "value": "Project name"}, "timeout_ms": 10000},
+      {"type": "fill", "target": {"by": "label", "value": "Project name"}, "value": "My project", "expected_url": "https://your-approved-site.com/projects", "expected_text": "New project"},
+      {"type": "click", "target": {"by": "role", "value": "button", "name": "Save project"}, "expected_url": "https://your-approved-site.com/projects", "expected_text": "New project"},
+      {"type": "read"}
+    ]
+  }
+}
+```
+
+The workflow must separately approve the exact domain and `browser.run`. It stays disabled until reviewed and enabled. Site resource/redirect hosts also need explicit approval; a website that loads other domains can pause until its scope is reviewed. Authentication, popups, downloads and dialogs still require manual attention. Iframes, uploads, arbitrary keypresses, JavaScript execution and autonomous page-by-page replanning are not implemented. Desktop apps follow the separate [screen-control roadmap](SCREEN_CONTROL_PLAN.md).
+
+Acceptance on 2026-10-20: real installed Chrome passed an isolated form workflow with semantic targets, delayed content, scrolling and readback; payment, MFA, duplicate targets and page/domain mismatches paused. A fresh-profile public navigation/read also completed through the full companion runner. This does not certify signed-in workflows on every site.
 
 ## Delivery, pause and uncertain outcomes
 

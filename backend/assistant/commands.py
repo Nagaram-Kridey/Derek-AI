@@ -480,6 +480,9 @@ def run(command_id):
         command.status = (
             "awaiting_confirmation" if result.get("action_proposals") else "completed"
         )
+        if result.get("tool_errors") and not result.get("successful_tools"):
+            command.status = "failed"
+            command.error = "\n".join(result["tool_errors"])[:1500]
         result["status"] = command.status
         command.response = result
     except RequestCancelled:
@@ -528,7 +531,7 @@ def run(command_id):
             ).first()
             if session:
                 for position, text in enumerate(
-                    telegram_blocks(command.response["reply_text"])
+                    telegram_blocks(command.response["reply_text"], truncate=not bool(command.response.get("action_proposals")) and command.response.get("answer_style") != "detailed", max_blocks=10 if command.response.get("answer_style") == "balanced" else 6)
                 ):
                     m.Delivery.objects.get_or_create(
                         user=command.user,
@@ -545,29 +548,29 @@ def run(command_id):
     return command
 
 
-def telegram_blocks(text):
-    # Paragraphs/sentences remain intact where possible; the full answer stays in history.
-    parts = re.split(r"\n\s*\n|(?<=[.!?])\s+", text.strip())
-    blocks, current = [], ""
-    for part in parts:
-        if len(current) + len(part) + 2 <= 1000:
-            current = (current + "\n\n" + part).strip()
-        else:
-            if current:
+def telegram_blocks(text, *, truncate=True, max_blocks=6):
+    # Each paragraph is a chat bubble. Bound verbose model output without losing
+    # the complete saved reply; delivery ordering and retry safety remain durable.
+    blocks = []
+    for paragraph in re.split(r"\n\s*\n", text.strip()):
+        current = ""
+        for part in re.split(r"(?<=[.!?])\s+|\n", paragraph):
+            part = part.strip()
+            if not part:
+                continue
+            if current and len(current) + len(part) + 1 > 500:
                 blocks.append(current)
-            while len(part) > 1000:
-                split = part.rfind(" ", 0, 1000)
-                split = split if split > 0 else 1000
+                current = ""
+            while len(part) > 500:
+                split = part.rfind(" ", 0, 501)
+                split = split if split > 0 else 500
                 blocks.append(part[:split])
                 part = part[split:].lstrip()
-            current = part
-    if current:
-        blocks.append(current)
-    if len(blocks) > 3:
-        return blocks[:2] + [
-            blocks[2][:850]
-            + "\n\nThe full reply is saved in your dashboard conversation."
-        ]
+            current = (current + "\n" + part).strip()
+        if current:
+            blocks.append(current)
+    if truncate and len(blocks) > max_blocks:
+        return blocks[:max_blocks - 1] + ["The full reply, including remaining details and sources, is saved in your dashboard conversation. Ask for a detailed answer to receive the full explanation here."]
     return blocks or ["No response text is available. Check Activity."]
 
 
@@ -645,7 +648,10 @@ def prepare(action):
     from . import services
 
     args = action.args.copy()
-    if action.tool == "schedule_task":
+    if action.tool == "control_workspace":
+        from .workspace_controls import prepare as prepare_control
+        args, label = prepare_control(action.user, args)
+    elif action.tool == "schedule_task":
         if args.get("kind", "reminder") not in {"reminder", "research"}:
             raise ValueError("Workflow schedules require review in Automations.")
         args = services.prepare_task(action.user, args)
@@ -750,7 +756,7 @@ def prepare(action):
     else:
         raise ValueError("Unsupported proposed action.")
     if (action.command.input_mode == "voice" and len(label) > 800) or (
-        action.command.channel == "telegram" and len(label) > 1800
+        action.command.channel == "telegram" and len(label) > 12000
     ):
         raise ValueError(
             "This change is too long for a complete spoken/chat readback. Shorten it or enter it directly in the dashboard."
@@ -812,7 +818,9 @@ def decide(proposal, approve, revision, binding, persist_message=True):
             }
             expired = True
         else:
-            if services.state(proposal.user).paused and approve:
+            from .workspace_controls import SAFE_WHILE_PAUSED
+            safe_control = action.tool == "control_workspace" and action.args.get("operation") in SAFE_WHILE_PAUSED
+            if services.state(proposal.user).paused and approve and not safe_control:
                 raise ValueError("Resume automations before confirming a change.")
             proposal.status = "executing" if approve else "cancelled"
             proposal.decided_at = timezone.now()
@@ -837,7 +845,10 @@ def decide(proposal, approve, revision, binding, persist_message=True):
             get_user_model().objects.select_for_update().get(pk=action.user_id)
             action = m.ActionExecution.objects.select_for_update().get(pk=action.pk)
             args = action.args
-            if action.tool == "schedule_task":
+            if action.tool == "control_workspace":
+                from .workspace_controls import apply as apply_control
+                result = apply_control(action.user, args)
+            elif action.tool == "schedule_task":
                 task = services.create_task(action.user, args)
                 result = {
                     "message": f"Scheduled '{task.name}' for {_schedule_label(task.schedule)}.",
@@ -955,6 +966,7 @@ def record_decision(action, proposal, result, approve, persist_message=True):
                 origin.status = (
                     "needs_attention"
                     if result.get("status") == "needs_attention"
+                    else "failed" if result.get("status") == "failed"
                     else "completed"
                 )
                 origin.response["reply_text"] = result["message"]
@@ -1019,6 +1031,9 @@ def execute_tool(command, step, name, args, gateway, response):
         if found.get("search_suggestions_html"):
             response["search_suggestions_html"].append(found["search_suggestions_html"])
         action.result = {"message": found["text"]}
+    elif name == "inspect_workspace":
+        from .workspace_controls import inspect
+        action.result = {"message": inspect(command.user, args)}
     elif name == "list_tasks":
         rows = m.ScheduledTask.objects.filter(user=command.user).order_by(
             "next_run_at"
@@ -1048,8 +1063,13 @@ def execute_tool(command, step, name, args, gateway, response):
             ensure_active(command)
             if name == "draft_workflow":
                 workflow = services.create_workflow(command.user, args)
+                schedule_label = (
+                    _schedule_label(workflow.trigger)
+                    if workflow.trigger.get("kind") != "manual"
+                    else "manual use"
+                )
                 action.result = {
-                    "message": "Workflow drafted. Review its sites, folders and actions in Automations before enabling it.",
+                    "message": f"Drafted '{workflow.name}' for {schedule_label}. It is not active. Review all sites, folders and actions in Automations, or request an exact review with /enable {workflow.id} and confirm it.",
                     "workflow_id": str(workflow.id),
                 }
             elif name == "run_deep_research":

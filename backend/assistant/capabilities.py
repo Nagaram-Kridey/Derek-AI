@@ -9,6 +9,8 @@ from django.utils import timezone
 from . import models as m
 
 META = {
+    "inspect_workspace": ("Inspect workflows, runs and reports", "List exact IDs and inspect owner-scoped workflow definitions or saved outcomes from any online chat.", "cloud", "none", "none"),
+    "control_workspace": ("Shared workspace controls", "Review and confirm workflow edits/enable/pause/run, global pause/resume, run/research cancellation, sensitive-step decisions and a Telegram PDF copy.", "cloud", "confirm", "none"),
     "search_web": (
         "Public web research",
         "Search current information with citations.",
@@ -76,7 +78,7 @@ META = {
         "Draft automations",
         "Draft scoped file, browser, Calendar and research workflows for review in Automations.",
         "cloud",
-        "dashboard_activation",
+        "scope_review",
         "none",
     ),
 }
@@ -90,10 +92,13 @@ def preferences(user):
 
 def profile_details(user, profile):
     provider = "gemini" if profile == "gemini" else settings.MODEL_PROVIDER
-    model = settings.GEMINI_MODEL if provider == "gemini" else settings.OLLAMA_MODEL
+    model = {"gemini": settings.GEMINI_MODEL, "ollama": settings.OLLAMA_MODEL,
+             "freellmapi": settings.FREELLMAPI_MODEL}.get(provider, "")
     configured = (
         bool(settings.GEMINI_API_KEY and model)
         if provider == "gemini"
+        else bool(model and settings.FREELLMAPI_BASE_URL and settings.FREELLMAPI_API_KEY)
+        if provider == "freellmapi"
         else bool(model and settings.OLLAMA_BASE_URL)
     )
     status, reason = (
@@ -139,6 +144,8 @@ def profile_details(user, profile):
         "reason": reason,
         "privacy": "Prompts are sent to Gemini."
         if provider == "gemini"
+        else "Prompts pass through your FreeLLMAPI router to its enabled upstream providers; routing may change the served model."
+        if provider == "freellmapi"
         else "Inference uses this server's Ollama installation; messages still pass through this service.",
     }
 
@@ -185,7 +192,7 @@ def catalog(user, profile=None):
             )
         elif dependency == "scheduler" and not scheduler:
             reason = "Drafts can be saved; background delivery is waiting for a scheduler heartbeat."
-        if assistant_state.paused and name in {
+        if assistant_state.paused and name != "control_workspace" and name in {
             *MUTATIONS,
             "run_deep_research",
             "draft_workflow",
@@ -205,6 +212,12 @@ def catalog(user, profile=None):
                 "parameters": declaration["parameters"],
             }
         )
+    rows.append({"id": "personal_memory", "title": "Shared personal memory",
+                 "description": "Say Remember label: detail. Review suggestions, edit, pin, pause or forget in Settings → Memory. Accepted facts are shared across normal web, Telegram and voice conversations.",
+                 "status": "ready" if preferences(user).memory_enabled else "paused",
+                 "reason": "Local bounded lookup; private desktop history is excluded. No extra model call for memory retrieval.",
+                 "location": "laptop" if settings.LOCAL_EXECUTION else "cloud", "approval": "owner_controls",
+                 "implemented": True, "channels": ["web", "desktop_voice", "telegram"]})
     for name, title, description in [
         (
             "local_files",
@@ -214,7 +227,7 @@ def catalog(user, profile=None):
         (
             "browser",
             "Signed-in browser workflows",
-            "Uses the separate laptop browser profile and reviewed domains; challenges pause execution.",
+            "Uses a separate laptop profile and reviewed domains. Supports exact labels/button names, CSS targets, bounded waits, scrolling, reading and form actions; challenges pause execution.",
         ),
     ]:
         rows.append(
@@ -324,7 +337,17 @@ def catalog(user, profile=None):
             "channels": ["desktop"],
         }
     )
+    rows.append({'id':'desktop_observation','title':'Local screen observation preview',
+        'description':'Open Settings → Screen observation or the local tray to select one app and approve a two-minute local UI Automation preview. Read-only control names and bounds stay local; no screenshots, input, model access or Telegram screen access. Known browsers/sensitive apps and elevated windows are excluded.',
+        'implemented':True,'channels':['desktop'],'location':'laptop','approval':'local_consent',
+        'status':'unverified' if settings.LOCAL_EXECUTION else 'needs_setup',
+        'reason':'Read-only local preview implemented; native per-app acceptance pending. This is not a model tool or general desktop control.'})
     for name, title, reason in [
+        (
+            "desktop_screen_control",
+            "Windows screen control",
+            "Planned: opt-in per-app Windows UI Automation with fresh observations, scoped actions and a local stop control. Current browser workflows do not grant arbitrary desktop access.",
+        ),
         (
             "wake_word",
             "Wake word",
@@ -365,23 +388,20 @@ def model_tools(user, profile):
 
 
 def system_context(user, profile, input_mode, channel):
+    from .prompt_templates import CHANNELS, VERSION
     rows = catalog(user, profile)["capabilities"]
     descriptions = "\n".join(
-        f"{row['title']}: {row['status']}. {row['description']} {row['reason']}"
+        f"{row['title']} ({row['id']}): {row['status']}. " + (row['reason'] if row['status'] not in {'ready', 'unverified'} else '')
         for row in rows
     )
-    style = (
-        "Use one or two short sentences and ask one question at a time."
-        if input_mode == "voice"
-        else "Use short paragraphs; Telegram replies should be concise."
-        if channel == "telegram"
-        else "Give clear answers with useful detail."
-    )
+    style = CHANNELS["voice" if input_mode == "voice" and channel != "telegram" else channel]
     return (
-        "Your name is Derek. This runtime capability catalog is authoritative; distinguish planned, unconfigured and offline features. "
+        f"Derek instruction version {VERSION}. This runtime capability catalog is authoritative; distinguish planned, unconfigured and offline features. "
         "All state changes require server validation. Reminder and Calendar mutations create proposals, not completed actions. "
-        "Use only exposed tools. Never claim a queued action completed, activate a workflow or grant permissions. "
+        "Use only exposed tools. Never claim a queued action completed or activate a workflow without its exact confirmed scope review. A model cannot grant permissions. "
         "Ask for AM/PM or the exact target when ambiguous. Model confidence cannot authorize a write. "
+        "Answer general knowledge, brainstorming and suggestions naturally. For current facts, news, prices, availability, product comparisons, recommendations or explicit internet research, use search_web before answering. "
+        "Never say you cannot access the internet when search_web is exposed. If search fails, say so and distinguish general knowledge from current evidence. Cite actual returned URLs; never invent sources or claim snippets are verified page contents. "
         + style
         + "\n"
         + descriptions

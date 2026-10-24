@@ -106,10 +106,10 @@ class OllamaGateway(ResearchPlanningMixin):
         except (ValueError, TypeError, KeyError):
             raise ProviderError("Ollama returned an invalid response.") from None
 
-    def chat(self, messages, tools, cancelled=None):
+    def chat(self, messages, tools, cancelled=None, max_output_tokens=512):
         if not messages or len(messages) > 100:
             raise ValueError("Provide between 1 and 100 chat messages.")
-        history = [{"role": "system", "content": SYSTEM + "\nReturn only the final user-facing answer or a tool call. Keep replies concise."}]
+        history = [{"role": "system", "content": SYSTEM + "\nReturn only the final user-facing answer or a tool call. Match the current answer-detail instruction; do not add filler."}]
         for message in messages:
             role, content = message.get("role"), message.get("content", "")
             if not isinstance(content, str) or len(content) > 40000:
@@ -122,7 +122,7 @@ class OllamaGateway(ResearchPlanningMixin):
                 raise ValueError("Unsupported chat role.")
             history.append({"role": role, "content": content})
         declarations = [{"type": "function", "function": item.get("function", item)} for item in tools[:32]]
-        result = self._request(history, tools=declarations, max_output_tokens=512, cancelled=cancelled)
+        result = self._request(history, tools=declarations, max_output_tokens=min(max(int(max_output_tokens), 128), 4096), cancelled=cancelled)
         registered = {item["function"]["name"] for item in declarations}
         calls = []
         for item in (result.get("tool_calls") or [])[:8]:
