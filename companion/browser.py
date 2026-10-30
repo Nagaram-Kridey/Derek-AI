@@ -154,6 +154,8 @@ def persistent_browser(profile, resolver_rules=None, *, browser_channel="chromiu
         if resolver_rules:
             args.append("--host-resolver-rules=" + resolver_rules)
         options = {"channel": browser_channel} if browser_channel in {"chrome", "msedge"} else {}
+        if browser_channel == 'brave':
+            options = {'executable_path': _installed_browser('brave')}
         context = playwright.chromium.launch_persistent_context(str(profile), headless=False, service_workers="block", accept_downloads=False, args=args, **options)
         try:
             context.set_default_timeout(15_000)
@@ -219,16 +221,17 @@ def run_browser(args, policy, profile, *, browser_channel="chromium", **callback
 def _installed_browser(channel):
     """Locate an installed vendor browser for a human-controlled login session."""
     vendor = {"chrome": ("Google", "Chrome", "Application", "chrome.exe"),
-              "msedge": ("Microsoft", "Edge", "Application", "msedge.exe")}[channel]
+              "msedge": ("Microsoft", "Edge", "Application", "msedge.exe"),
+              "brave": ("BraveSoftware", "Brave-Browser", "Application", "brave.exe")}[channel]
     for root in (os.getenv("PROGRAMFILES"), os.getenv("PROGRAMFILES(X86)"), os.getenv("LOCALAPPDATA")):
         if root:
             executable = Path(root).joinpath(*vendor)
             if executable.is_file():
                 return str(executable)
-    executable = shutil.which("google-chrome" if channel == "chrome" else "microsoft-edge")
+    executable = shutil.which({'chrome':'google-chrome','msedge':'microsoft-edge','brave':'brave-browser'}[channel])
     if executable:
         return executable
-    raise RuntimeError("Install Google Chrome or Microsoft Edge for the selected browser channel.")
+    raise RuntimeError("Install the selected browser (Google Chrome, Microsoft Edge or Brave).")
 
 
 def manual_login(profile, url, *, browser_channel="chromium"):
@@ -238,7 +241,7 @@ def manual_login(profile, url, *, browser_channel="chromium"):
     parsed = urlsplit(url)
     domains = DomainPolicy([parsed.hostname or ""])
     domains.check(url)
-    if browser_channel in {"chrome", "msedge"}:
+    if browser_channel in {"chrome", "msedge", "brave"}:
         profile.mkdir(parents=True, exist_ok=True)
         # Human sign-in runs in a normal vendor browser with no automation or
         # remote-debugging connection. Only Derek's dedicated profile is used.

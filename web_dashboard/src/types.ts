@@ -17,6 +17,8 @@ export type ActionProposal = {
   expires_at: string;
 };
 export type Message = {
+  command_id?: string;
+  status?: string;
   id?: Identifier;
   role: string;
   content: string;

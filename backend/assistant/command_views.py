@@ -8,6 +8,8 @@ from rest_framework.decorators import throttle_classes
 from . import commands, models as m
 from .capabilities import catalog, preferences as owner_preferences, profile_details
 from .utils import audit, kick
+from django.conf import settings
+from django.db import transaction
 
 
 class CommandThrottle(UserRateThrottle):
@@ -15,6 +17,32 @@ class CommandThrottle(UserRateThrottle):
 
     def allow_request(self, request, view):
         return True if request.method == "GET" else super().allow_request(request, view)
+
+
+@api_view(["POST"])
+@throttle_classes([CommandThrottle])
+def telegram_output(request, pk):
+    """Deliver a saved answer to the owner without calling a model or tool again."""
+    from .tasks import deliver_command
+    if not settings.TELEGRAM_BOT_TOKEN or not settings.TELEGRAM_CHAT_ID:
+        return Response({"detail": "Configure your Telegram bot and approved chat first."}, status=409)
+    with transaction.atomic():
+        command = get_object_or_404(m.Command.objects.select_for_update(), user=request.user, pk=pk)
+        if command.status != "completed" or command.response.get('action_proposals'):
+            return Response({"detail": "Only completed answers without approval readbacks can be forwarded."}, status=409)
+        text = command.response.get('reply_text', '')
+        if not text.strip():
+            return Response({"detail": "There is no saved answer to forward."}, status=409)
+        for position, block in enumerate(commands.telegram_blocks(text, truncate=False)):
+            m.Delivery.objects.get_or_create(user=request.user, command=command, position=position,
+                defaults={"destination": str(settings.TELEGRAM_CHAT_ID), "text": block})
+        rows = list(command.deliveries.order_by('position'))
+        for row in rows:
+            if row.status == 'pending':
+                transaction.on_commit(lambda pk=str(row.pk): kick(deliver_command, pk))
+        audit(request.user, 'command.telegram_output', command_id=str(command.pk), bubbles=len(rows))
+    return Response({"message": "Saved answer queued for Telegram; no model or action was rerun.",
+                     "deliveries": [{"id": str(r.pk), "status": r.status} for r in rows]})
 
 
 @api_view(["POST"])

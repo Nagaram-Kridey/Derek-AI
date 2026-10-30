@@ -11,7 +11,7 @@ from .model_base import ResearchPlanningMixin, SYSTEM
 
 
 class FreeLLMAPIGateway(ResearchPlanningMixin):
-    def __init__(self, base_url, api_key, model, timeout_seconds=120, reasoning_effort="none", research_model=None):
+    def __init__(self, base_url, api_key, model, timeout_seconds=120, reasoning_effort="none", research_model=None, interactive_timeout_seconds=60):
         parsed = urlsplit(base_url)
         loopback = parsed.hostname in {"localhost", "127.0.0.1", "::1"}
         if (parsed.scheme not in {"http", "https"} or not parsed.hostname
@@ -29,6 +29,7 @@ class FreeLLMAPIGateway(ResearchPlanningMixin):
             raise ConfigError("FREELLMAPI_RESEARCH_MODEL must be an enabled schema-capable model or router profile.")
         self.last_requested_model = model
         self.timeout_seconds = min(max(int(timeout_seconds), 15), 600)
+        self.interactive_timeout_seconds = min(self.timeout_seconds, max(15, int(interactive_timeout_seconds)))
         if reasoning_effort not in {"", "none", "minimal", "low", "medium", "high"}:
             raise ConfigError("FREELLMAPI_REASONING_EFFORT must be blank, none, minimal, low, medium or high.")
         self.reasoning_effort = reasoning_effort
@@ -52,17 +53,18 @@ class FreeLLMAPIGateway(ResearchPlanningMixin):
             body["response_format"] = {"type": "json_schema", "json_schema": {
                 "name": "derek_result", "strict": False, "schema": schema}}
         headers = {"Authorization": "Bearer " + self.api_key}
+        timeout = self.timeout_seconds if schema is not None else self.interactive_timeout_seconds
         try:
             if cancelled:
                 from .cancellation import cancellable_request
                 async def generate():
                     async with httpx.AsyncClient(trust_env=False, follow_redirects=False,
-                                                 timeout=httpx.Timeout(self.timeout_seconds, connect=5)) as client:
+                                                 timeout=httpx.Timeout(timeout, connect=5)) as client:
                         return await client.post(self.base_url + "/chat/completions", headers=headers, json=body)
                 response = cancellable_request(generate, cancelled)
             else:
                 with httpx.Client(trust_env=False, follow_redirects=False,
-                                  timeout=httpx.Timeout(self.timeout_seconds, connect=5)) as client:
+                                  timeout=httpx.Timeout(timeout, connect=5)) as client:
                     response = client.post(self.base_url + "/chat/completions", headers=headers, json=body)
             if response.status_code in {401, 403}:
                 raise ConfigError("FreeLLMAPI authentication failed. Check the unified router key.")

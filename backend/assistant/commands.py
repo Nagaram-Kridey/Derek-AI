@@ -531,7 +531,7 @@ def run(command_id):
             ).first()
             if session:
                 for position, text in enumerate(
-                    telegram_blocks(command.response["reply_text"], truncate=not bool(command.response.get("action_proposals")) and command.response.get("answer_style") != "detailed", max_blocks=10 if command.response.get("answer_style") == "balanced" else 6)
+                    telegram_blocks(command.response["reply_text"], truncate=False)
                 ):
                     m.Delivery.objects.get_or_create(
                         user=command.user,
@@ -548,7 +548,7 @@ def run(command_id):
     return command
 
 
-def telegram_blocks(text, *, truncate=True, max_blocks=6):
+def telegram_blocks(text, *, truncate=False, max_blocks=6):
     # Each paragraph is a chat bubble. Bound verbose model output without losing
     # the complete saved reply; delivery ordering and retry safety remain durable.
     blocks = []
@@ -569,6 +569,15 @@ def telegram_blocks(text, *, truncate=True, max_blocks=6):
             current = (current + "\n" + part).strip()
         if current:
             blocks.append(current)
+    # Keep headings and short paragraphs together. Sending every tiny
+    # paragraph separately adds an HTTP round trip and pacing delay per line.
+    packed = []
+    for block in blocks:
+        if packed and len(packed[-1]) + len(block) + 2 <= 500:
+            packed[-1] += "\n\n" + block
+        else:
+            packed.append(block)
+    blocks = packed
     if truncate and len(blocks) > max_blocks:
         return blocks[:max_blocks - 1] + ["The full reply, including remaining details and sources, is saved in your dashboard conversation. Ask for a detailed answer to receive the full explanation here."]
     return blocks or ["No response text is available. Check Activity."]
@@ -651,6 +660,10 @@ def prepare(action):
     if action.tool == "control_workspace":
         from .workspace_controls import prepare as prepare_control
         args, label = prepare_control(action.user, args)
+    elif action.tool == 'send_whatsapp_message':
+        from .contracts import WhatsAppArgs
+        args=WhatsAppArgs.model_validate({**args,'open_and_search':True,'transport':'brave_web'}).model_dump()
+        label=f"Send one WhatsApp message via Brave WhatsApp Web to {args['recipient']}: {args['message']}"
     elif action.tool == "schedule_task":
         if args.get("kind", "reminder") not in {"reminder", "research"}:
             raise ValueError("Workflow schedules require review in Automations.")
@@ -848,6 +861,8 @@ def decide(proposal, approve, revision, binding, persist_message=True):
             if action.tool == "control_workspace":
                 from .workspace_controls import apply as apply_control
                 result = apply_control(action.user, args)
+            elif action.tool == 'send_whatsapp_message':
+                result=services.queue_whatsapp_message(action.user,args)
             elif action.tool == "schedule_task":
                 task = services.create_task(action.user, args)
                 result = {

@@ -2000,3 +2000,95 @@ summary:focus-visible {
 .evidence-details p {
   line-height: 1.75;
 }
+
+/* Derek workspace: daily work first, quiet controls and evidence-led status. */
+:root { --ink: #213b3c; --accent: #236f70; --muted: #5e6b6b; --line: #dce0dc; --paper: #fffefa; --mint: #e0ece8; background: #f5f5ef; color: #273a3b; }
+.app-shell { background: #f5f5ef; }
+.sidebar { width: 236px; padding: 28px 18px 18px; background: #eeefe9; color: var(--ink); border-right: 1px solid var(--line); }
+.sidebar .brand { margin: 0 10px 30px; }
+.brand-mark { background: transparent; border: 1px solid #9baead; border-radius: 50%; color: var(--accent); }
+.brand { font-weight: 650; letter-spacing: -.045em; }
+.nav-group + .nav-group { margin-top: 28px; }
+.nav-heading { margin: 0 12px 10px; color: var(--muted); font-size: 11px; letter-spacing: .04em; }
+.nav-item { color: #4b5a5a; min-height: 44px; border-radius: 5px; padding: 10px 12px; margin-bottom: 3px; font-size: 13px; }
+.nav-item.selected { color: #203334; background: #dfe3dc; font-weight: 650; }
+.nav-item:hover { background: #e3e7df; color: #203334; }
+.nav-dot { background: var(--accent); }
+.sidebar-bottom { padding-top: 28px; }
+.companion-card { background: transparent; border: 1px solid #d5dcd4; border-radius: 6px; padding: 12px; margin-bottom: 16px; }
+.companion-card strong, .profile strong { color: var(--ink); }
+.companion-card small, .profile small { color: var(--muted); }
+.profile { border-color: var(--line); }
+.avatar { background: #dce3dd; color: var(--ink); }
+.main-panel { margin-left: 236px; width: calc(100% - 236px); }
+.topbar { padding: 28px 36px 22px; border-bottom: 1px solid var(--line); background: #fffefa; }
+.topbar h1 { font-size: 26px; font-weight: 650; letter-spacing: -.035em; }
+.topbar p { margin-top: 5px; font-size: 13px; color: var(--muted); }
+.eyebrow { font-size: 10px; letter-spacing: .08em; color: var(--muted); }
+.page-content { padding: 28px 36px; }
+.panel, .task-card, .feature-card { border-radius: 8px; box-shadow: none; background: var(--paper); }
+.button, input, select, textarea { border-radius: 6px; }
+.button { min-height: 40px; }
+.day-hero { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 0 0 26px; align-items: flex-start; }
+.day-hero h2 { font-family: Georgia, 'Times New Roman', serif; font-weight: 400; font-size: clamp(24px, 2.3vw, 31px); letter-spacing: -.035em; margin: 10px 0; }
+.day-hero p { max-width: 450px; color: var(--muted); }
+.day-hero .button { margin-top: 18px; }
+.day-shortcuts { min-width: 270px; padding-top: 12px; }
+.day-shortcuts button { display: flex; width: 100%; align-items: center; gap: 12px; min-height: 66px; padding: 10px 0; text-align: left; border-bottom: 1px solid var(--line); font-size: 13px; }
+.day-shortcuts button span { flex: 1; }
+.day-shortcuts small { display: block; margin-top: 4px; font-size: 12px; }
+.stat-grid { gap: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); }
+.stat-card { display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px; border: 0; border-right: 1px solid var(--line); border-radius: 0; padding: 16px 20px; background: transparent; }
+.stat-card:last-child { border-right: 0; }
+.stat-card > svg { display: none; }
+.stat-card > strong { font-size: 26px; font-weight: 450; font-variant-numeric: tabular-nums; }
+.stat-card > span { font-size: 12px; }
+.stat-card:hover { transform: none; background: #f0f2eb; }
+.home-page .panel h3 { margin-top: 5px; font-size: 17px; letter-spacing: -.02em; }
+.home-grid { gap: 20px; }
+.tile-icon { background: transparent; border-radius: 0; }
+.health-grid { gap: 14px; }
+.workspace-footer { color: var(--muted); }
+.skip-link { position: fixed; top: -60px; left: 16px; z-index: 100; background: var(--ink); color: white; padding: 12px; }
+.skip-link:focus { top: 12px; }
+.mobile-navigation { display: none; }
+@media (max-width: 1100px) and (min-width: 701px) {
+  .sidebar { width: 208px; padding-inline: 12px; }
+  .main-panel { margin-left: 208px; width: calc(100% - 208px); }
+  .topbar, .page-content { padding-left: 24px; padding-right: 24px; }
+  .day-shortcuts { min-width: 220px; }
+  .day-hero { gap: 20px; }
+}
+@media (max-width: 850px) { .day-hero { flex-direction: column; } .day-shortcuts { display: flex; gap: 22px; width: 100%; padding-top: 0; } .day-shortcuts button { flex: 1; } }
+@media (max-width: 700px) {
+  .sidebar { width: 100%; padding: 14px 18px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .sidebar-brand { display: flex; align-items: center; justify-content: space-between; }
+  .sidebar .brand { margin: 0; }
+  .mobile-navigation { display: inline-flex; min-height: 44px; }
+  .sidebar nav, .sidebar-bottom { display: none; }
+  .sidebar.navigation-open nav { display: block; overflow: visible; padding-top: 18px; }
+  .sidebar.navigation-open .sidebar-bottom { display: block; padding-top: 10px; }
+  .nav-heading { display: block; }
+  .nav-item { width: 100%; font-size: 14px; }
+  .nav-group + .nav-group { margin-top: 20px; }
+  .main-panel { margin-left: 0; width: 100%; }
+  .topbar { padding: 20px 18px; gap: 12px; }
+  .topbar h1 { font-size: 23px; }
+  .topbar-meta { padding-top: 0; }
+  .topbar-meta .badge { font-size: 10px; max-width: 120px; text-align: center; }
+  .page-content { padding: 22px 18px; }
+  .day-hero { padding-bottom: 22px; }
+  .day-shortcuts { flex-direction: column; gap: 0; }
+  .stat-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .stat-card { padding: 16px; }
+  .stat-card:nth-child(2) { border-right: 0; }
+  .stat-card:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .home-grid { grid-template-columns: 1fr; }
+  .button, .text-button, .icon-button { min-height: 44px; }
+  .workspace-footer { padding: 18px; flex-wrap: wrap; gap: 8px; }
+}
+
+/* Preserve contrast on the dark sign-in panel. */
+.login-story .eyebrow.light { color: #dceae4; }
+.login-story .brand-mark { color: #f6fff9; border-color: #b3cdc4; }
+@media (max-width: 700px) { .topbar-meta .badge { white-space: normal; overflow-wrap: anywhere; } }

@@ -12,6 +12,14 @@ def test_detailed_telegram_preserves_all_text_in_small_bubbles():
     assert " ".join(" ".join(blocks).split()) == " ".join(text.split())
 
 
+def test_short_paragraphs_are_packed_without_losing_the_answer():
+    text='\n\n'.join('Point '+str(i)+': '+('useful detail '*5) for i in range(10))
+    blocks=telegram_blocks(text)
+    assert 1<len(blocks)<10
+    assert all(len(block)<=500 for block in blocks)
+    assert ' '.join(' '.join(blocks).split())==' '.join(text.split())
+
+
 def test_detail_budget_and_voice_action_capacity():
     command = SimpleNamespace(channel="telegram", input_mode="text", input_text="Explain caching")
     assert reply_budget(command, style="detailed") > reply_budget(command, style="brief")

@@ -35,6 +35,10 @@ class Config:
         name = "browser-profile" if self.browser_channel == "chromium" else "browser-profile-" + self.browser_channel
         return self.state_dir / name
 
+    @property
+    def whatsapp_profile(self):
+        return self.state_dir / 'whatsapp-brave-profile'
+
     @classmethod
     def from_env(cls):
         try:
@@ -50,8 +54,8 @@ class Config:
         if not parsed.hostname:
             raise ValueError("LILYLEO_API_URL is invalid.")
         browser_channel = os.getenv("LILYLEO_BROWSER_CHANNEL", "chromium").strip().lower()
-        if browser_channel not in {"chromium", "chrome", "msedge"}:
-            raise ValueError("LILYLEO_BROWSER_CHANNEL must be chromium, chrome, or msedge.")
+        if browser_channel not in {"chromium", "chrome", "msedge", "brave"}:
+            raise ValueError("LILYLEO_BROWSER_CHANNEL must be chromium, chrome, msedge, or brave.")
         default_state = Path(os.getenv("LOCALAPPDATA", str(Path.home() / ".local" / "share"))) / "LilyLeo"
         token = os.getenv("LILYLEO_USER_TOKEN", "")
         try:

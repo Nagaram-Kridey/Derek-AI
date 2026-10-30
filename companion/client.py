@@ -76,6 +76,12 @@ class APIClient:
     def heartbeat(self):
         return self.post("/v1/desktop/heartbeat/", {"version": "0.1.0"})
 
+    def progress(self, job, stage):
+        import uuid
+        identifier=str(uuid.UUID(str(job['id'])))
+        return self.post(f'/v1/desktop/jobs/{identifier}/progress/',
+                         {'lease_token':job['lease_token'],'stage':stage})
+
     def complete(self, job, outcome):
         identifier = str(job["id"])
         if not identifier or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-" for c in identifier):

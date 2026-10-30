@@ -1,3 +1,75 @@
+## Web answer improvements — 30 October 2026
+
+- [x] Updated web response template: answer first, requested depth, selective Markdown and concrete examples; existing action/citation safeguards retained.
+- [x] Improved answer typography, code overflow, themed links and expandable sources; added Copy answer with clipboard failure feedback.
+- [x] Production build, 9 frontend tests/Settings rendering and 18 provider/router checks passed. Build installed locally; managed restart requested.
+- [ ] Fresh live answer acceptance blocked: configured FreeLLMAPI endpoint unreachable (~2.17 seconds). Installed portable router launch attempted; subsequent call still failed. No successful generation or visual browser acceptance claimed.
+
+## Owner-directed interface — 30 October 2026
+
+- [x] Completed five interview rounds; recorded colors, navigation, cards, typography, voice and page organization in [DESIGN_BRIEF.md](DESIGN_BRIEF.md).
+- [x] Selected app direction true-black-flat, seed 908608363, adapted to owner-selected graphite/teal and light palette.
+- [x] Implement chat-first shell, persisted light/dark switch, profile sections, collapsible Today and four-destination mobile navigation. Expandable sources and compact report list added.
+- [x] Production build, 9 frontend tests and Settings rendering checks passed; installed build locally. Browser visual and keyboard acceptance remains pending.
+- [ ] Browser screenshots at desktop/tablet/mobile and keyboard walkthrough; never infer visual acceptance from compilation.
+
+# Current acceptance and realignment - 29 October 2026
+
+See [ACCEPTANCE_STATUS.md](ACCEPTANCE_STATUS.md) for the single current summary of implementation, isolated tests, live evidence and blockers. This supersedes older acceptance claims below. Current priority: core reliability; messaging monitoring/direct sends, cloud/phone and new desktop capabilities are deferred.
+
+## Interface redesign and feature review — 29 October 2026
+
+- [x] Independent red/blue review completed across all 37 catalog items; recommendations and trade-offs recorded in [FEATURE_REVIEW.md](FEATURE_REVIEW.md).
+- [x] Agreed to preserve existing functionality and history, simplify daily navigation, distinguish connection from acceptance, and keep roadmap controls explicitly planning-only.
+- [x] Implement grouped daily/history/manage navigation, compact Today, mobile menu, honest connection labels and roadmap recommendations without removing routes or saved data.
+- [x] Production build, 9 frontend tests and Settings rendering checks passed; copied build to the local app.
+- [ ] Desktop/mobile visual and keyboard walkthrough: blocked because local browser use is disabled in Codex Work settings. Responsive CSS exists; visual acceptance is not claimed.
+- [ ] Reconcile stale catalog priorities/statuses with current evidence without overwriting the owner's customized board.
+
+## WhatsApp / Telegram receipt correction - 2026-10-27
+
+- [x] Fix grouped WhatsApp bubbles with no tail marker using explicit incoming/outgoing anchors in the same layout; ambiguous layouts remain unverified.
+- [x] Wait up to 15 seconds for new outgoing evidence; keep empty-composer and new-ID requirements, with no resend.
+- [x] Telegram uncertainty now says the message may already be sent rather than implying failure.
+- [x] 26 focused tests and selected Ruff checks passed.
+- [x] Read-only live inspection recognized the latest requested message as outgoing at 11:52, with empty composer. No message typed or sent during verification.
+- [ ] Verify full corrected send-to-Telegram success on the next genuine requested message. Historical uncertain records preserved.
+
+# Brave WhatsApp Web implementation — 2026-10-27
+
+- [x] Added installed Brave browser support, preserving the existing general-browser selection. Dedicated WhatsApp profile: `%LOCALAPPDATA%\LilyLeo\whatsapp-brave-profile`; session data stays outside the repo and recovery archives.
+- [x] Opened the isolated profile at the official WhatsApp Web page; owner confirmed linking and closed it. Two subsequent browser reopenings verified the session without a new QR scan. Profile existence alone is never reported as logged in.
+- [x] Added local Settings setup/status controls and CLI `python -m companion.whatsapp_web login|inspect|status`. Setup accepts no caller-provided URLs, paths or browser arguments. Busy profiles are reported without killing browsers or resetting sessions.
+- [x] New chat/Telegram/voice proposals select `brave_web` and name the transport in the confirmation. Legacy workflow snapshots default to their existing native transport. No stopped jobs were replayed and no profile credentials copied.
+- [x] Added dedicated DOM sender: exact contact frames, exact header, preserved drafts, exact composed text, new outgoing IDs, shared interaction lock, pause checks and journal-before-input. No general script/shell/model-controlled URLs exposed.
+- [x] WhatsApp-only network policy allows public WhatsApp/WhatsApp.net/Fbcdn hosts and the observed secure WebSocket on `web.whatsapp.com:5222`. Other browser workflows retain their original blocking policy. Fixed a synchronous rejected-WebSocket close that could hang a handshake; rejected sockets never connect.
+- [x] Actual test submitted and confirmed only through Derek APIs: command `1da13bd3-ae5b-4474-8239-8844ae8e6cdb`, run `a613887c-f2d6-4639-ae51-73535e5833f3`. Derek selected MSV Krishna, typed the exact introduction and issued Send. No Codex manual typing or Send click was used.
+- [x] Read-only follow-up using Derek browser code confirmed the exact new outgoing introduction at **11:32, 27/10/2026**, separately from the historical 23:59 message, and an empty composer. No second test message was sent.
+- [x] Fixed live DOM differences discovered by that test: current outgoing bubbles use `tail-out` rather than `.message-out`/`true_` IDs; message-search hits repeat the recipient name and must be excluded from contact matching. Real DOM fixtures cover both cases, old-message rejection, drafts, ambiguity, changed recipient, cancellation and cached worker completion.
+- [ ] A fresh send after the receipt-marker correction remains to be accepted with the next genuinely requested message. The original run retains its honest `needs_attention` result because its initial receipt check was uncertain. Do not replay it or treat the separate read-only verification as an original successful receipt check.
+- [x] Added read-only `inspect-message --recipient ... --message ...` for existing-message checks. Reports matching outgoing receipt hashes/rendered times and composer state; it never types into a composer or sends, and historical matches alone do not prove a particular run succeeded.
+- [x] Final full Python suite passed with one optional browser check skipped; dashboard production build, selected Ruff checks and git whitespace checks passed. Local runtime restarted with the final code; setup API reports linked and browser closed.
+- [ ] Draft group test and reply watcher remain deferred; no `Noted` automation is active.
+
+Previous checkpoints below are historical; this entry supersedes the old Windows-focus blocker for the preferred Brave Web transport.
+
+# Latest acceptance checkpoint — 2026-10-27
+
+- [x] Reproduced WhatsApp composer failure after chat selection: blinking caret read as `tType a message`. Added bounded retries requiring an exact empty placeholder before mutation; preserve real drafts. Verified live read-only exact recipient/empty composer check.
+- [x] Corrected composer click height to the verified input band; reuse already verified open recipient instead of retyping a retained search. A repeated, newly confirmed message requires an additional outgoing bubble; old bubbles cannot certify success.
+- [x] Added fixed Windows package activation fallback; no arbitrary keyboard shortcuts or focus/security-setting changes.
+- [ ] Autonomous WhatsApp end-to-end acceptance FAILED: command `6c6985e3-1606-4909-a6ca-dc44ae0db65e`, run `5d005cf7-9300-4a5c-bd2e-46c023deda7d` stopped with Windows refusing focus. Both attempts in this checkpoint stopped before typing. Codex submitted and confirmed only through Derek APIs, with no manual WhatsApp input after the owner's latest instruction. No new message claimed sent; uncertain journals remain intact.
+- [x] Telegram answers retain all content in <=500-character bubbles. Short adjacent paragraphs are packed to reduce delivery calls; no six/ten-bubble cutoff. Ordered, durable delivery remains intact.
+- [x] Added saved-answer-only `Send reply to Telegram` dashboard button and authenticated endpoint; duplicates reuse delivery records and never rerun models/tools. Owner isolation and pending-proposal rejection tested.
+- [x] Live output acceptance: command `fc93e464-e13f-4e04-ae3b-ac8b95ca965c` delivered six bubbles, Telegram IDs 49–54. Research pipeline test `024b7505-0bba-4f0b-b0c9-5b1a47ceef90` delivered 11 bubbles. These were API/internal-pipeline tests, not a new human Telegram inbound-message test. Packing refinement followed these measurements. Final packed-output check delivered the saved arithmetic answer in two bubbles (Telegram IDs 69, 70), with no model rerun.
+- [x] Everyday arithmetic and context tests passed: total 1290, remaining 1010; follow-up folders total 1470, remaining 830. Provider times 4.45s and 3.23s; follow-up end-to-end 4.03s. Router identified dots-studio/dots-3-note-preview:free for these samples.
+- [ ] General technical accuracy is NOT accepted: earlier router request failed after 63s; another detailed answer took 10s but made constraint errors. Search-backed answer corrected the main mechanism but misstated btree_gist prerequisites. A correction was requested from Derek using checked official documentation; this does not prove independent technical reliability.
+- [x] Strengthened versioned technical-answer instructions; interactive FreeLLMAPI read timeout now at most 60s while structured research retains its configured budget. No model/provider credentials changed and no silent provider fallback added.
+- [x] Browser extension debated and added as PLANNED to the source catalog, product roadmap and live board. Explicit tab grants, local native messaging, shared approvals/journal; no all-sites access or cookie export. Not a native WhatsApp fix.
+- [x] Dashboard production build and full Python suite passed (one optional browser test skipped); focused tests passed after subsequent chunk-packing change. Runtime restart loads current code.
+
+Historical entries below retain their original scope and may describe superseded limitations. This checkpoint is the current acceptance status.
+
 # Derek — Implementation Checklist
 
 Updated: **2026-10-24 · Asia/Kolkata**
@@ -12,6 +84,15 @@ Updated: **2026-10-24 · Asia/Kolkata**
 - [ ] Local desktop automatic sign-in and scoped screen/mouse implementation remain pending. Existing protected voice credentials do not establish automatic dashboard sign-in.
 
 ## Current status
+
+### Screen preview usability / WhatsApp check — 2026-10-24
+
+- [x] Reproduced the apparent empty preview: permission was off and the app selector/result pane gave little guidance. Added ordered instructions, an explanatory placeholder, disabled read/approve buttons until ready, and clearer empty-inventory feedback.
+- [x] Native UI check confirmed enabling shows eligible apps and selecting/approving WhatsApp produces a read-only result.
+- [x] Added narrow WhatsApp-owned WebView descendant recognition and process-identity regressions. Standalone WebView selection remains blocked.
+- [x] Installed WhatsApp Desktop still exposes only window/pane metadata, with no usable messaging controls. Preview now explains that limit instead of showing an unexplained empty result.
+- [x] Updated preview relaunched with consent off. **216 Python tests passed / 1 opt-in browser test skipped**; selected Ruff and compilation checks passed. Requested WhatsApp messaging/reply watcher recorded as a blocked roadmap item, not an enabled capability.
+- [ ] WhatsApp sending and five-minute acknowledgement are blocked on a usable signed-in automation surface and a messaging executor. No message sent or watcher started. Owner choice/QR pairing question is pending; see [WHATSAPP_SETUP.md](WHATSAPP_SETUP.md).
 
 ### Next desktop batch — local sign-in and observation, 2026-10-24
 
@@ -274,3 +355,81 @@ Cloud access while asleep, Calendar consent, manual website sign-in and the Airt
 Earlier dated work, historical test/CI results, published commit IDs and the separate launch-film draft are preserved in [IMPLEMENTATION_HISTORY.md](IMPLEMENTATION_HISTORY.md).
 
 Final closure verification: **185 Python tests passed, 1 opt-in browser test skipped**. This verifies isolated regressions, not live runtime availability.
+# WhatsApp Desktop follow-up — 2026-10-24
+
+### Confirmation/status clarity — 2026-10-27
+
+- [x] Verify newest Confirm change was accepted and proposal confirmed; execution stopped on Windows foreground refusal, not a broken button.
+- [x] Allow independent one-off desktop status notices past uncertain earlier acknowledgements, preserving ordinary split-answer ordering and never replaying the uncertain bubble.
+- [x] Reserve desktop progress positions above callback acknowledgement positions; repeated confirmation reports the saved terminal desktop state in the callback answer.
+- [x] Pass six isolated feedback/queue regressions and Ruff; queue one clarification to the owner without re-running WhatsApp.
+- [ ] Windows focus restrictions still require bringing WhatsApp forward when activation is denied; old confirmations remain single-use.
+
+### Search typing acceptance — 2026-10-27
+
+- [x] Reproduce post-focus OCR failure: magnified caret distorted Search to bearch; independent full-window OCR retained exact placeholder with magnifier icon.
+- [x] Accept only bounded exact search landmark variants and bounded fresh-frame retries; arbitrary/unrecognized text still prevents typing.
+- [x] Restrict recipient selection to Chats/Contacts section before Groups in common or message results; shared-group mentions no longer count as duplicate contacts.
+- [x] Live source-companion search-only acceptance: typed MSV Krishna, selected unique chat and verified header. CLI returned recipient_verified=true, message_typed=false, message_sent=false.
+- [x] Pass 19 WhatsApp unit tests, including focused OCR artifact, unknown-search rejection and shared-group duplicate regression.
+- [ ] Fully automatic message typing/send acceptance remains separate. No stopped Telegram job was replayed for this check.
+
+### Desktop progress and final chat feedback — 2026-10-27
+
+- [x] Diagnose latest run: stopped at exact empty-search recognition, before message typing; no successful send.
+- [x] Add lease-authenticated, fixed-stage desktop progress endpoint; ordered deduplicated updates go to the originating chat and Telegram delivery queue.
+- [x] Add final completed/attention/failure feedback when desktop results arrive; never call uncertain input sent/delivered.
+- [x] Prevent progress text being replaced by the generic inactive-proposal notice.
+- [x] Magnify the bounded sidebar search text region locally for OCR, excluding the magnifier icon.
+- [x] Pass isolated feedback idempotency/order and completion-wording tests; save missing terminal feedback for the stopped owner run without replaying its send.
+- [ ] Live acceptance of search OCR and end-to-end automatic sending remains open; existing punctuation and supported-layout limits still apply.
+
+### Telegram reply queue recovery — 2026-10-27
+
+- [x] Diagnose received command with pending reply: an older out-of-order bubble was repeatedly selected and starved newer responses.
+- [x] Select only bubbles whose earlier pending/sending positions are clear; do not race an existing send to the same destination.
+- [x] Replace delayed inactive proposal readbacks with an expiry notice; never renew or execute an expired confirmation automatically.
+- [x] Hold replies older than 24 hours for attention rather than emitting stale backlog automatically.
+- [x] Pass three isolated delivery selection/staleness tests and Ruff; restart runtime for corrected delivery selection.
+
+### One-time chat requests — 2026-10-27
+
+- [x] Add `send_whatsapp_message` as a shared chat capability with exact recipient/text readback and proposal-bound confirmation.
+- [x] Route explicit “Send a WhatsApp message to NAME saying: TEXT” requests locally without model inference; advertise the tool for other natural wording.
+- [x] Queue a single desktop job after confirmation using existing durable run records; no user automation setup, no schedule, no manual replay and no routine-list entry.
+- [x] Pass three isolated command tests and selected Ruff checks. No live message sent for this change.
+- [ ] Existing autonomous desktop OCR/punctuation acceptance remains open; queued responses do not claim delivery.
+
+### App navigation and page controls — 2026-10-27
+
+- [x] Add opt-in `open_and_search` to the typed WhatsApp workflow contract.
+- [x] Activate the installed WhatsApp package directly, maximize and foreground its verified window; pause if Windows refuses focus.
+- [x] Search the dedicated sidebar field and select only one exact recipient result; reject duplicates, partial names and message-body matches.
+- [x] Journal navigation before input, retain existing draft protection, exact final readback, Escape stop and uncertain-send no-replay behavior.
+- [x] Add Automations → WhatsApp message form that saves a manual workflow for review; no immediate send from form submission.
+- [x] Pass 16 WhatsApp tests, selected Ruff checks and dashboard TypeScript/Vite build; install dashboard assets locally.
+- [ ] Live acceptance of launch → search → selected recipient → independently verified send across supported Windows layouts. No new message sent for this batch.
+- [ ] Robust punctuation readback remains open. Generic arbitrary-app mouse/keyboard and browser tab switching are not exposed by this narrow adapter.
+
+### Assisted live send — 2026-10-26 session
+
+- [x] Register typed manual-only `desktop.whatsapp` tool and wire desktop dispatch, allowed-tool policy, mutation journal and browser/desktop interaction lock.
+- [x] Add magnified composer OCR and narrowly scoped post-focus caret handling; 29 focused sender/observation tests passed.
+- [x] Derek typed the exact MSV Krishna introduction; Codex visually verified it and clicked Send. Outgoing bubble confirmed, composer empty. This is assisted acceptance.
+- [x] Pause the test workflow afterward; keep uncertain journal evidence and do not falsely mark the autonomous run completed.
+- [ ] Fix remaining punctuation readback and prove fully automatic send acceptance. Draft group remains untested.
+- [ ] Reply watching/acknowledgement deferred by owner; no watcher running.
+
+- [x] Owner selected native desktop screen/mouse access; no Web pairing required for this path.
+- [x] Install local Windows OCR and verify a generated English image (caught and fixed the static OCR dimension API).
+- [x] Add optional WhatsApp-only visual text reading to the consent preview, with in-memory images and bounded, killable execution.
+- [x] Add recipient-region and message-verification unit coverage (29 focused tests including existing observation coverage).
+- [x] Run the complete Python suite and selected Ruff checks after integration; suite passed with one optional browser test skipped. Live native capture and messaging remain unverified.
+- [ ] Accept live WhatsApp visual capture compatibility and recipient/bubble extraction.
+- [ ] Implement native input with focus/geometry checks, stop controls, shared interaction lock and durable uncertain-send handling.
+- [ ] Command Derek to send the authorized Draft and MSV Krishna messages; verify outgoing bubbles.
+- [ ] Accept a real new incoming reply and single `Noted` within five minutes. No messages sent and no watcher running yet.
+
+## Model diagnostic reliability — 30 October 2026
+
+Added bounded word-count/concept diagnostics and flushed per-sample benchmark checkpoints, so interruptions retain completed measurements without raw replies or credentials. Seven focused regression tests passed, including interruption recovery and diagnostic privacy. The previously completed eight-sample FreeLLMAPI run passed six arithmetic/context/uncertainty samples; both explanation samples failed (quality gate and 60-second timeout). This is historical benchmark evidence, not a current live-route acceptance. A fresh diagnostic run remains required; provider settings are unchanged.

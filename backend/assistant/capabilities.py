@@ -9,6 +9,9 @@ from django.utils import timezone
 from . import models as m
 
 META = {
+    'send_whatsapp_message': ('Send a WhatsApp message',
+        'Confirm an exact recipient and message in chat, then queue one Brave WhatsApp Web send. Link the dedicated browser in local Settings. Ambiguous recipients, drafts or expired sessions pause execution.',
+        'laptop','confirm','none'),
     "inspect_workspace": ("Inspect workflows, runs and reports", "List exact IDs and inspect owner-scoped workflow definitions or saved outcomes from any online chat.", "cloud", "none", "none"),
     "control_workspace": ("Shared workspace controls", "Review and confirm workflow edits/enable/pause/run, global pause/resume, run/research cancellation, sensitive-step decisions and a Telegram PDF copy.", "cloud", "confirm", "none"),
     "search_web": (
@@ -76,7 +79,7 @@ META = {
     ),
     "draft_workflow": (
         "Draft automations",
-        "Draft scoped file, browser, Calendar and research workflows for review in Automations.",
+        "Draft scoped file, browser, Calendar, research and current-chat WhatsApp Desktop workflows for review. WhatsApp can optionally open its installed app and find an exact recipient; requires signed-in unlocked Windows. OCR verification can stop for manual attention; no reply monitoring yet.",
         "cloud",
         "scope_review",
         "none",

@@ -175,7 +175,7 @@ def workflows(request, pk=None, action=None):
         from .form_requests import create_once
         row, created = create_once(request.user, "workflow", dict(request.data), m.Workflow, lambda: services.create_workflow(request.user, request.data))
         return Response(data(row), status=201 if created else 200)
-    return Response([data(row) for row in m.Workflow.objects.filter(user=request.user).order_by("-created_at")[:200]])
+    return Response([data(row) for row in m.Workflow.objects.filter(user=request.user).exclude(description=services.ONE_OFF_WHATSAPP).order_by("-created_at")[:200]])
 
 def cancel_workflow(workflow):
     from .workspace_controls import cancel_workflow as cancel
@@ -381,6 +381,24 @@ def claim_job(request):
 
 @api_view(["POST"])
 @authentication_classes([DeviceAuth])
+def desktop_progress(request, pk):
+    with transaction.atomic():
+        job=m.DesktopJob.objects.select_for_update().get(pk=owned(m.DesktopJob,request,pk).pk)
+        if (job.device_id!=request.device.id or job.status!='leased'
+                or job.lease_expires_at<timezone.now()
+                or not secrets.compare_digest(job.lease_digest,digest(str(request.data.get('lease_token',''))))):
+            raise AuthenticationFailed('Invalid or expired job lease')
+        if not services.run_allowed(job.run):
+            return Response({'detail':'Job is stopped'},status=409)
+        from .desktop_feedback import feedback,STAGES
+        stage=request.data.get('stage')
+        if stage not in STAGES:
+            raise ValueError('Unknown desktop progress stage')
+        feedback(job,stage)
+    return Response({'accepted':True})
+
+@api_view(["POST"])
+@authentication_classes([DeviceAuth])
 def complete_job(request, pk):
     with transaction.atomic():
         job = owned(m.DesktopJob, request, pk)
@@ -400,6 +418,8 @@ def complete_job(request, pk):
         job.save()
         if run.status == "cancelled":
             return Response({"accepted": True})
+        from .desktop_feedback import feedback
+        feedback(job,status,job.error)
         if status == "needs_approval":
             risk = request.data.get("risk")
             services.request_approval(run, risk, job)

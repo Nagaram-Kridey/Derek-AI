@@ -4,3 +4,9 @@ Pillow>=11,<13
 psutil>=7,<8
 pywin32>=311,<400; sys_platform == 'win32'
 comtypes>=1.4.13,<2; sys_platform == 'win32'
+winrt-Windows.Media.Ocr>=4,<5; sys_platform == 'win32'
+winrt-Windows.Graphics.Imaging>=4,<5; sys_platform == 'win32'
+winrt-Windows.Storage.Streams>=4,<5; sys_platform == 'win32'
+winrt-Windows.Globalization>=4,<5; sys_platform == 'win32'
+winrt-Windows.Foundation>=4,<5; sys_platform == 'win32'
+winrt-Windows.Foundation.Collections>=4,<5; sys_platform == 'win32'

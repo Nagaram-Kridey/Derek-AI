@@ -65,6 +65,16 @@ class ResearchArgs(Strict):
     report_kind: Literal["standard", "project_ideas"] = "standard"
 class NotifyArgs(Strict):
     message: str = Field(min_length=1, max_length=4000)
+class WhatsAppArgs(Strict):
+    transport: Literal['native', 'brave_web'] = 'native'
+    open_and_search: bool = False
+    recipient: str = Field(min_length=1, max_length=100)
+    message: str = Field(min_length=1, max_length=2000)
+    @model_validator(mode="after")
+    def plain_text(self):
+        if any(ord(c)<32 for c in self.recipient+self.message):
+            raise ValueError('WhatsApp recipient and message must be single-line plain text')
+        return self
 class CalendarCreate(Strict):
     summary: str = Field(min_length=1, max_length=240)
     start: dict
@@ -94,10 +104,10 @@ class CalendarUpdate(CalendarCreate):
 SCHEMAS = {
     "file.list": PathArg, "file.read": PathArg, "file.write": WriteArg,
     "file.move": MoveArg, "file.delete": PathArg, "browser.run": BrowserArgs,
-    "research.run": ResearchArgs, "notify": NotifyArgs,
+    "research.run": ResearchArgs, "notify": NotifyArgs, "desktop.whatsapp": WhatsAppArgs,
     "calendar.create": CalendarCreate, "calendar.update": CalendarUpdate,
 }
-DESKTOP_TOOLS = {name for name in SCHEMAS if name.startswith(("file.", "browser."))}
+DESKTOP_TOOLS = {name for name in SCHEMAS if name.startswith(("file.", "browser.", "desktop."))}
 
 
 @lru_cache(maxsize=1)
@@ -184,6 +194,9 @@ def validate_workflow(data):
     trigger = data.get("trigger", {"kind": "manual"})
     if not isinstance(trigger, dict):
         raise ValueError("trigger must be an object")
+    if any(s['tool']=='desktop.whatsapp' for s in cleaned):
+        if trigger.get('kind') != 'manual' or len(cleaned) != 1:
+            raise ValueError('WhatsApp Desktop supports one manually reviewed message per workflow only')
     if trigger.get("kind") != "manual":
         trigger = validate_schedule(trigger)
     return {"steps": cleaned, "allowed_tools": sorted(set(allowed)), "allowed_domains": domains, "allowed_paths": paths, "trigger": trigger}

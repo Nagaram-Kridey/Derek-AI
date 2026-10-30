@@ -18,18 +18,17 @@ import type { IconName } from './ui';
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 const candidateDesktopCode = desktopLaunchCode(window.location.hash);
 const desktopCode = window.location.origin === 'http://127.0.0.1:8000' && !API_BASE ? candidateDesktopCode : null;
-if (candidateDesktopCode) window.history.replaceState(null, '', window.location.pathname + window.location.search + '#home');
+if (candidateDesktopCode) window.history.replaceState(null, '', window.location.pathname + window.location.search + '#chat');
 type Session = { token: string; username: string; remember?: boolean };
 type Page = 'roadmap' | 'home' | 'chat' | 'automations' | 'reports' | 'activity' | 'settings' | 'features' | 'commands';
 const pages: { key: Page; name: string; icon: IconName; subtitle: string }[] = [
-  { key: 'roadmap', name: 'Roadmap', icon: 'spark', subtitle: 'Features, priorities and evidence.' },
   {
     key: 'home',
     name: 'Today',
     icon: 'spark',
-    subtitle: 'Your routines, discoveries, and a little room to think.',
+    subtitle: 'Your schedule, saved work and what needs attention.',
   },
-  { key: 'chat', name: 'Your assistant', icon: 'chat', subtitle: 'A little more room for what matters.' },
+  { key: 'chat', name: 'Chat', icon: 'chat', subtitle: 'Think, research and get things done in one conversation.' },
   {
     key: 'features',
     name: 'Features',
@@ -38,11 +37,11 @@ const pages: { key: Page; name: string; icon: IconName; subtitle: string }[] = [
   },
   {
     key: 'automations',
-    name: 'Automations',
+    name: 'Tasks',
     icon: 'clock',
-    subtitle: 'Make the everyday take care of itself.',
+    subtitle: 'Scheduled reminders, research and approved workflows.',
   },
-  { key: 'reports', name: 'Reports', icon: 'file', subtitle: 'Research, with the sources to back it up.' },
+  { key: 'reports', name: 'Reports', icon: 'file', subtitle: 'Saved research, sources and verification notes.' },
   {
     key: 'activity',
     name: 'Activity',
@@ -61,7 +60,9 @@ const pages: { key: Page; name: string; icon: IconName; subtitle: string }[] = [
     icon: 'settings',
     subtitle: 'Your connections, preferences, and controls.',
   },
+  { key: 'roadmap', name: 'Roadmap', icon: 'spark', subtitle: 'Priorities, acceptance evidence and ideas for later.' },
 ];
+const primaryPages: Page[] = ['chat', 'automations', 'reports', 'home'];
 
 function readSession(): Session | null {
   try {
@@ -174,11 +175,28 @@ function Login({ onLogin, notice }: { onLogin: (session: Session) => void; notic
 
 function Workspace({ session, onLogout }: { session: Session; onLogout: () => void }) {
   const currentPage = () =>
-    pages.find((item) => item.key === window.location.hash.slice(1).split('?')[0])?.key || 'home';
+    pages.find((item) => item.key === window.location.hash.slice(1).split('?')[0])?.key || 'chat';
   const [page, updatePage] = useState<Page>(currentPage);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [todayOpen, setTodayOpen] = useState(false);
+  const [settingsFocus, setSettingsFocus] = useState('');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try { return localStorage.getItem('derek.theme') === 'light' ? 'light' : 'dark'; } catch { return 'dark'; }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem('derek.theme', theme); } catch { /* Optional preference storage. */ }
+  }, [theme]);
+  useEffect(() => {
+    const dismiss = (event: KeyboardEvent) => { if (event.key === 'Escape') setProfileOpen(false); };
+    window.addEventListener('keydown', dismiss);
+    return () => window.removeEventListener('keydown', dismiss);
+  }, []);
   const setPage = (value: Page) => {
     window.location.hash = value;
     updatePage(value);
+    setProfileOpen(false);
   };
   useEffect(() => {
     const update = () => updatePage(currentPage());
@@ -216,62 +234,43 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
       setLoggingOut(false);
     }
   }
+  useEffect(() => {
+    if (page !== 'settings' || !settingsFocus) return;
+    const frame = requestAnimationFrame(() => {
+      const heading = Array.from(document.querySelectorAll('h2,h3')).find(item => item.textContent === settingsFocus);
+      if (heading instanceof HTMLElement) { heading.tabIndex = -1; heading.focus(); heading.scrollIntoView({ block: 'start', behavior: 'instant' }); }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [page, settingsFocus]);
+  const openSettings = (heading: string) => { setSettingsFocus(heading); setPage('settings'); };
   const current = pages.find((item) => item.key === page)!;
   return (
-    <div className="app-shell">
+    <div className={`app-shell derek-workspace ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      <a className="skip-link" href="#main-content" onClick={(event) => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>Skip to content</a>
       <aside className="sidebar">
-        <Brand />
-        <div className="nav-heading">YOUR WORKSPACE</div>
-        <nav aria-label="Main navigation">
-          {pages.map((item) => (
-            <button
-              key={item.key}
-              className={`nav-item ${page === item.key ? 'selected' : ''}`}
-              aria-current={page === item.key ? 'page' : undefined}
-              onClick={() => setPage(item.key)}
-            >
-              <Icon name={item.icon} />
-              <span>{item.name}</span>
-              {page === item.key && <span className="nav-dot" />}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="companion-card">
-            <span className={`connection-dot ${status.data?.desktop_online ? 'connected' : ''}`} />
-            <div>
-              <strong>Desktop companion</strong>
-              <small>
-                {status.data
-                  ? status.data.desktop_online
-                    ? 'Connected & ready'
-                    : 'Offline · jobs will wait'
-                  : 'Checking connection…'}
-              </small>
-            </div>
-          </div>
-          <div className="profile">
-            <span className="avatar">{session.username.slice(0, 1).toUpperCase()}</span>
-            <div>
-              <strong>{session.username}</strong>
-              <small>Personal workspace</small>
-            </div>
-            <button
-              className="icon-button"
-              aria-label="Sign out"
-              title="Sign out"
-              disabled={loggingOut}
-              onClick={logout}
-            >
-              <Icon name="logout" size={18} />
-            </button>
-          </div>
-        </div>
+        <div className="sidebar-brand"><Brand /><button className="icon-button sidebar-toggle" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!sidebarCollapsed}><Icon name="chevron" /></button></div>
+        <nav aria-label="Main navigation">{primaryPages.map(key => pages.find(item => item.key === key)!).map(item => <button key={item.key} className={`nav-item ${page === item.key ? 'selected' : ''}`} aria-label={item.name} title={sidebarCollapsed ? item.name : undefined} aria-current={page === item.key ? 'page' : undefined} onClick={() => setPage(item.key)}><Icon name={item.icon} /><span>{item.name}</span></button>)}</nav>
+        <div className="sidebar-bottom"><small>{status.data?.desktop_online ? 'Companion connected' : 'Companion offline'}</small><p>{session.username}</p></div>
       </aside>
-      <main className="main-panel">
+      <div className="profile-control">
+        <button className="button profile-trigger" aria-expanded={profileOpen} aria-controls="profile-options" onClick={() => setProfileOpen(!profileOpen)}><span className="avatar">{session.username.slice(0, 1).toUpperCase()}</span><span>Profile</span></button>
+        {profileOpen && <div id="profile-options" className="profile-options" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setProfileOpen(false); }}>
+          <strong>{session.username}</strong>
+          <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>Appearance · {theme === 'dark' ? 'Switch to light' : 'Switch to dark'}</button>
+          <button onClick={() => openSettings('Connections')}>Connections & models</button>
+          <button onClick={() => openSettings('Desktop voice access')}>Voice</button>
+          <button onClick={() => openSettings('Your data')}>Privacy & memory</button>
+          <button onClick={() => setPage('commands')}>Request history</button>
+          <button onClick={() => setPage('activity')}>Activity & notifications</button>
+          <button onClick={() => setPage('features')}>Capabilities</button>
+          <button onClick={() => setPage('roadmap')}>Build & roadmap</button>
+          <button disabled={loggingOut} onClick={logout}>Sign out</button>
+        </div>}
+      </div>
+      <main className="main-panel" id="main-content" tabIndex={-1}>
         <header className="topbar">
           <div>
-            <span className="eyebrow">DEREK / {page.toUpperCase()}</span>
+
             <h1>{current.name}</h1>
             <p>{current.subtitle}</p>
           </div>
@@ -292,8 +291,8 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                     ? status.data.paused
                       ? 'automations paused'
                       : status.data.runtime?.managed
-                        ? 'running locally'
-                        : 'service online'
+                        ? 'local service connected'
+                        : 'service connected'
                     : 'connecting'
               }
             />
@@ -319,13 +318,13 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
           )}{' '}
           {page === 'commands' && <Commands api={api} refresh={refresh} changed={changed} />}{' '}
           {page === 'chat' && (
-            <Chat
+            <div className={`conversation-layout ${todayOpen ? 'today-expanded' : ''}`}><div className="conversation-main"><button className="button today-toggle" aria-expanded={todayOpen} aria-controls="chat-today" onClick={() => setTodayOpen(!todayOpen)}>{todayOpen ? 'Hide Today' : 'Show Today'}</button><Chat
               api={api}
               refresh={refresh}
               changed={changed}
               onAutomations={() => setPage('automations')}
               localVoice={status.data?.runtime?.managed}
-            />
+            /></div>{todayOpen && <aside id="chat-today" className="chat-today" aria-label="Today"><Home api={api} refresh={refresh} changed={changed} status={status.data} username={session.username} navigate={setPage} /></aside>}</div>
           )}{' '}
           {page === 'automations' && <Automations api={api} refresh={refresh} changed={changed} />}{' '}
           {page === 'reports' && <ReportLibrary api={api} refresh={refresh} changed={changed} />}{' '}
@@ -338,11 +337,12 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
         </div>
         <footer className="workspace-footer">
           <span>
-            <Icon name="spark" size={12} /> A little help, a little more possibility.
+            <Icon name="monitor" size={12} /> Derek · Your personal workspace
           </span>
           <span>All times in Asia/Kolkata</span>
         </footer>
       </main>
+      <nav className="bottom-navigation" aria-label="Main navigation">{primaryPages.map(key => pages.find(item => item.key === key)!).map(item => <button key={item.key} aria-current={page === item.key ? 'page' : undefined} onClick={() => setPage(item.key)}><Icon name={item.icon} /><span>{item.name}</span></button>)}</nav>
     </div>
   );
 }

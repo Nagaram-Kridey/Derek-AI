@@ -331,7 +331,7 @@ export function ReportLibrary({ api, refresh, changed }: { api: Api; refresh: nu
       {reports.loading && !reports.data ? (
         <Loading />
       ) : visible.length ? (
-        <div className="card-grid">
+        <div className="report-list">
           {visible.map((report) => (
             <article className="card report-card" key={report.id}>
               <div className="section-heading">

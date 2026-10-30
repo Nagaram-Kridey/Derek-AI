@@ -1,4 +1,4 @@
-"""Read-only per-window observations. No screenshots, input or model transport."""
+"""Read-only per-window observations. Optional ephemeral OCR; no input or transport."""
 from dataclasses import asdict, dataclass
 import multiprocessing
 import json
@@ -10,7 +10,7 @@ import time
 BLOCKED = {'chrome.exe','msedge.exe','firefox.exe','brave.exe','opera.exe','iexplore.exe',
            'windowsterminal.exe','cmd.exe','powershell.exe','pwsh.exe','conhost.exe',
            'keepass.exe','keepassxc.exe','1password.exe','bitwarden.exe','credentialuibroker.exe',
-           'consent.exe','logonui.exe','winlogon.exe','mstsc.exe','code.exe','devenv.exe'}
+           'consent.exe','logonui.exe','winlogon.exe','mstsc.exe','code.exe','devenv.exe','msedgewebview2.exe'}
 SENSITIVE_TITLES = ('password','sign in','sign-in','log in','login','authentication','credentials','payment','banking')
 
 
@@ -102,9 +102,29 @@ def element_data(element, number):
             'bounds':[rect.left,rect.top,rect.right,rect.bottom]}
 
 
+def scoped_processes(scope):
+    """WhatsApp hosts its controls in owned WebView children, not the root PID."""
+    import psutil
+    allowed={scope.pid:scope.started}
+    if Path(scope.executable).name.lower()=='whatsapp.root.exe':
+        for child in psutil.Process(scope.pid).children(recursive=True):
+            if child.name().lower()=='msedgewebview2.exe':
+                allowed[child.pid]=child.create_time()
+    return allowed
+
+
+def process_matches(pid, allowed):
+    import psutil
+    try:
+        return pid in allowed and psutil.Process(pid).create_time()==allowed[pid]
+    except psutil.Error:
+        return False
+
+
 def read_elements(scope):
     """UIA APIs are read only here; protected elements are skipped before names."""
     validate_scope(scope)
+    allowed=scoped_processes(scope)
     import comtypes
     import comtypes.client
     comtypes.CoInitialize()
@@ -118,7 +138,7 @@ def read_elements(scope):
         deadline = time.monotonic()+3
         while queue and len(result)<80 and budget>0 and time.monotonic()<deadline:
             element, depth=queue.pop(0)
-            if element.CurrentProcessId != scope.pid:
+            if not process_matches(element.CurrentProcessId,allowed):
                 continue
             if element.CurrentIsPassword:
                 result.append(element_data(element,len(result)+1))
@@ -138,9 +158,54 @@ def read_elements(scope):
         comtypes.CoUninitialize()
 
 
-def worker(scope_data, pipe):
+def worker(scope_data, pipe, visual=False):
     try:
-        pipe.send_bytes(json.dumps({'ok':True,'observation':read_elements(WindowScope(**scope_data))}).encode())
+        scope=WindowScope(**scope_data)
+        if visual:
+            import asyncio
+            from .visual_text import capture_approved_window, recognize
+            image=capture_approved_window(scope)
+            captured_at=time.monotonic()
+            try:
+                boxes=asyncio.run(recognize(image))
+                # Small dark-theme composer text is unreliable in a full-window
+                # OCR pass. Read that bounded region at twice its native size.
+                if image.width>=1100:
+                    from .visual_text import TextBox
+                    left,top=int(image.width*.28),image.height-90
+                    crop=image.crop((left,top,image.width-90,image.height-5))
+                    scale=min(3,4096//crop.width)
+                    enlarged=crop.resize((crop.width*scale,crop.height*scale))
+                    try:
+                        detail=asyncio.run(recognize(enlarged))
+                        boxes=[b for b in boxes if not (b.left>=left and b.top>=top)]
+                        boxes.extend(TextBox(b.text,left+b.left/scale,top+b.top/scale,
+                                             b.width/scale,b.height/scale,b.surface) for b in detail)
+                    finally:
+                        crop.close();enlarged.close()
+                    # The sidebar search placeholder is also small, dark UI
+                    # text. Restrict magnification to its text area, excluding
+                    # the magnifying-glass icon and chat history below it.
+                    left,top=int(image.width*.067),105
+                    right,bottom=int(image.width*.22),155
+                    crop=image.crop((left,top,right,bottom))
+                    enlarged=crop.resize((crop.width*3,crop.height*3))
+                    try:
+                        detail=asyncio.run(recognize(enlarged))
+                        boxes=[b for b in boxes if not (left<=b.left<right and top<=b.top<bottom)]
+                        boxes.extend(TextBox(b.text,left+b.left/3,top+b.top/3,
+                                             b.width/3,b.height/3,b.surface) for b in detail)
+                    finally:
+                        crop.close();enlarged.close()
+            finally:
+                image.close()
+            validate_scope(scope)
+            observation={'elements':[], 'text_boxes':[asdict(box) for box in boxes],
+                         'local_only':True, 'input_enabled':False, 'visual':True,
+                         'captured_at':captured_at}
+        else:
+            observation=read_elements(scope)
+        pipe.send_bytes(json.dumps({'ok':True,'observation':observation}).encode())
     except Exception:
         pipe.send_bytes(b'{"ok":false}')
     finally:
@@ -163,7 +228,7 @@ class ObservationSession:
         self.scope=scope
         self.expires=time.monotonic()+120
 
-    def start(self):
+    def start(self, visual=False):
         if self.scope is None or time.monotonic()>=self.expires:
             self.revoke()
             raise ObservationError('Approve an application for a new two-minute session.')
@@ -172,7 +237,7 @@ class ObservationSession:
             raise ObservationError('An observation is already running.')
         context=multiprocessing.get_context('spawn')
         parent, child=context.Pipe(duplex=False)
-        process=context.Process(target=worker,args=(asdict(self.scope),child),daemon=True)
+        process=context.Process(target=worker,args=(asdict(self.scope),child,visual),daemon=True)
         try:
             process.start()
         except Exception:

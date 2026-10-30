@@ -8,6 +8,26 @@ from .contracts import validate_workflow, RISKS
 from .scheduling import validate_schedule, next_due
 from .utils import audit, payload_digest, kick, BudgetGateway, decrypt_credentials, encrypt_credentials
 
+ONE_OFF_WHATSAPP = '[derek:one-off-whatsapp]'
+
+
+def queue_whatsapp_message(user, args):
+    """Durable desktop bookkeeping for one confirmed chat action, no routine."""
+    from .contracts import WhatsAppArgs
+    clean=WhatsAppArgs.model_validate(args).model_dump()
+    workflow=create_workflow(user, {
+        'name':f"One-time WhatsApp to {clean['recipient']}",
+        'description':ONE_OFF_WHATSAPP,
+        'steps':[{'tool':'desktop.whatsapp','args':clean}],
+        'allowed_tools':['desktop.whatsapp'],'allowed_domains':[],
+        'allowed_paths':[],'trigger':{'kind':'manual'},
+    })
+    enable_workflow(workflow)
+    workflow.refresh_from_db()
+    run=start_run(workflow)
+    return {'message':'WhatsApp message queued once. Keep Windows unlocked. For Brave WhatsApp Web, finish linking and close its setup windows first. Sending is confirmed only by the saved desktop result in Activity.',
+            'run_id':str(run.id),'status':'queued'}
+
 def state(user):
     return m.AssistantState.objects.get_or_create(user=user)[0]
 
@@ -68,6 +88,8 @@ def start_run(workflow):
         raise ValueError("All automations are paused")
     if not workflow.enabled or not workflow.reviewed_at:
         raise ValueError("Review and enable the workflow first")
+    if workflow.description==ONE_OFF_WHATSAPP and m.WorkflowRun.objects.filter(workflow=workflow).exists():
+        raise ValueError('This one-time chat action already has a run. Inspect its outcome; it cannot be replayed.')
     spec = validate_workflow({"steps": workflow.steps, "allowed_tools": workflow.allowed_tools, "allowed_domains": workflow.allowed_domains, "allowed_paths": workflow.allowed_paths, "trigger": workflow.trigger})
     run = m.WorkflowRun.objects.create(user=workflow.user, workflow=workflow, snapshot={**spec, "name": workflow.name, "version": workflow.version})
     audit(workflow.user, "run.queued", run_id=str(run.id))
@@ -140,6 +162,7 @@ def tool_contracts():
         return {"name": name, "description": description, "parameters": {"type": "object", "properties": properties, "required": list(required)}}
     text = {"type": "string"}
     return [
+        function('send_whatsapp_message', 'For an immediate one-time WhatsApp request use this tool. Prepare exact recipient/message confirmation using the dedicated Brave WhatsApp Web profile. Link manually in local Settings and close setup windows before sending. Never claim sent before the desktop verifies a new outgoing message. No schedule or automation setup required. Ask for missing recipient or message.', {'recipient':text,'message':text}, ['recipient','message']),
         function("search_web", "Search current public internet information with sources", {"query": text}, ["query"]),
         function("run_deep_research", "Queue cited research and DOCX/PDF exports. Use report_kind=project_ideas for five enterprise software/AI project proposals ranked down to two detailed plans.", {"topic": text, "include_academic": {"type": "boolean"}, "report_kind": {"type": "string", "enum": ["standard", "project_ideas"]}}, ["topic"]),
         function("schedule_task", "Create a reminder or recurring research job. Ask if time is unclear. weekdays 0=Mon..6=Sun", {"name": text, "kind": {"type": "string", "enum": ["reminder", "research"]}, "payload": {"type": "object", "properties": {"message": text, "topic": text, "include_academic": {"type": "boolean"}, "report_kind": {"type": "string", "enum": ["standard", "project_ideas"]}}}, "schedule": {"type": "object", "properties": {"kind": {"type": "string", "enum": ["once", "daily", "weekly"]}, "at": text, "time": text, "timezone": text, "weekdays": {"type": "array", "items": {"type": "integer"}}}}}, ["name", "kind", "payload", "schedule"]),
@@ -151,7 +174,7 @@ def tool_contracts():
         function("set_task_enabled", "Propose pausing or resuming a reminder/research task; never change workflow schedules through this tool", {"task_id": text, "enabled": {"type": "boolean"}}, ["task_id", "enabled"]),
         function("calendar_create_event", "Propose an owned-calendar event. Read back exact start/end and wait for user confirmation.", {"summary": text, "start": text, "end": text, "timezone": text, "description": text, "location": text, "calendar_id": text}, ["summary", "start", "end"]),
         function("calendar_update_event", "Propose changing a specific owned-calendar event. Use its exact event_id from calendar_list_events; never guess the event or AM/PM.", {"event_id": text, "summary": text, "start": text, "end": text, "timezone": text, "description": text, "location": text, "calendar_id": text}, ["event_id"]),
-        function("draft_workflow", "Draft a workflow for user review. Never activate. Registered tools: file.list/read/write/move/delete, browser.run, calendar.create/update, research.run, notify. research.run args: topic, optional include_academic, report_kind (standard or project_ideas for five enterprise project proposals with two shortlisted plans). Each step has tool and typed args. Browser steps use args.actions: [{type: navigate, url: https://www.youtube.com/}]. Use type=navigate, never action=open or a bare args.url. Browser mutating actions require expected_url and expected_text; folders are absolute Windows paths. Ask for missing sites/folders first.", {"name": text, "description": text, "steps": {"type": "array", "items": workflow_step_schema(), "minItems": 1, "maxItems": 30}, "allowed_tools": {"type": "array", "items": text}, "allowed_domains": {"type": "array", "items": text}, "allowed_paths": {"type": "array", "items": text}, "trigger": {"type": "object", "properties": {"kind": text, "at": text, "time": text, "timezone": text, "weekdays": {"type": "array", "items": {"type": "integer"}}}}}, ["name", "steps", "allowed_tools", "allowed_domains", "allowed_paths"]),
+        function("draft_workflow", "Draft a workflow for user review. Never activate. Registered tools: file.list/read/write/move/delete, browser.run, calendar.create/update, research.run, notify, desktop.whatsapp. desktop.whatsapp args: recipient (exact contact name), message (exact reviewed single-line text), transport (use brave_web for a new reviewed workflow), open_and_search=true. Brave Web uses the dedicated linked local profile, exact DOM recipient and draft checks, and a new outgoing message ID. Requires awake/unlocked Windows and closed setup windows. Missing/expired login, duplicate contacts or existing drafts pause it. Legacy native workflows retain their original Windows/OCR transport and wide-layout requirements. No reply monitoring. Use a manual trigger for message tests; do not claim delivered/read. research.run args: topic, optional include_academic, report_kind (standard or project_ideas for five enterprise project proposals with two shortlisted plans). Each step has tool and typed args. Browser steps use args.actions: [{type: navigate, url: https://www.youtube.com/}]. Use type=navigate, never action=open or a bare args.url. Browser mutating actions require expected_url and expected_text; folders are absolute Windows paths. Ask for missing sites/folders first.", {"name": text, "description": text, "steps": {"type": "array", "items": workflow_step_schema(), "minItems": 1, "maxItems": 30}, "allowed_tools": {"type": "array", "items": text}, "allowed_domains": {"type": "array", "items": text}, "allowed_paths": {"type": "array", "items": text}, "trigger": {"type": "object", "properties": {"kind": text, "at": text, "time": text, "timezone": text, "weekdays": {"type": "array", "items": {"type": "integer"}}}}}, ["name", "steps", "allowed_tools", "allowed_domains", "allowed_paths"]),
     ]
 
 def tools():
@@ -182,6 +205,11 @@ def respond(command):
         ensure_active(command)
         response.update(reply_text=control_reply, handled_by="shared_controls")
         return response
+    from .whatsapp_intents import controls as whatsapp_controls
+    whatsapp_reply = whatsapp_controls(command)
+    if whatsapp_reply is not None:
+        response.update(reply_text=whatsapp_reply, handled_by="whatsapp_controls")
+        return response
     from . import memory
     memory_reply = memory.process(command, input_message)
     if memory_reply is not None:
@@ -197,7 +225,8 @@ def respond(command):
         return response
     from .schedule_intents import route, guard_unrecorded_claim
     local_control = control_route(command)
-    local_schedule = local_control or route(command)
+    from .whatsapp_intents import route as whatsapp_route
+    local_schedule = local_control or whatsapp_route(command) or route(command)
     style = answer_style(command)
     response["answer_style"] = style
     gateway, history = None, []

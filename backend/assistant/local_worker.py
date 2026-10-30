@@ -115,11 +115,8 @@ def main():
         )
         if notification:
             return tasks.deliver_notification, notification.pk
-        delivery = (
-            m.Delivery.objects.filter(status="pending", due_at__lte=timezone.now())
-            .order_by("due_at", "position")
-            .first()
-        )
+        from .delivery_queue import next_delivery
+        delivery = next_delivery()
         if delivery:
             return tasks.deliver_command, delivery.pk
         report = (

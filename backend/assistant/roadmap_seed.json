@@ -13,8 +13,8 @@
     "enabled": true,
     "test_mode": "isolated",
     "test_result": "not_run",
-    "notes": "",
-    "priority": "later",
+    "notes": "2026-10-29 realignment: see ACCEPTANCE_STATUS.md for current isolated/live acceptance and blockers. Continuous WhatsApp monitoring/direct sends deferred.",
+    "priority": "now",
     "evidence": "Source implementation and historical checklist; live acceptance is separate."
   },
   {
@@ -51,8 +51,8 @@
     "enabled": true,
     "test_mode": "isolated",
     "test_result": "not_run",
-    "notes": "",
-    "priority": "later",
+    "notes": "2026-10-29 realignment: see ACCEPTANCE_STATUS.md for current isolated/live acceptance and blockers. Continuous WhatsApp monitoring/direct sends deferred.",
+    "priority": "now",
     "evidence": "Source implementation and historical checklist; live acceptance is separate."
   },
   {
@@ -71,7 +71,7 @@
     "enabled": true,
     "test_mode": "isolated",
     "test_result": "not_run",
-    "notes": "",
+    "notes": "2026-10-29 realignment: see ACCEPTANCE_STATUS.md for current isolated/live acceptance and blockers. Continuous WhatsApp monitoring/direct sends deferred.",
     "priority": "now",
     "evidence": ""
   },
@@ -109,8 +109,8 @@
     "enabled": true,
     "test_mode": "isolated",
     "test_result": "not_run",
-    "notes": "",
-    "priority": "later",
+    "notes": "2026-10-29 realignment: see ACCEPTANCE_STATUS.md for current isolated/live acceptance and blockers. Continuous WhatsApp monitoring/direct sends deferred.",
+    "priority": "now",
     "evidence": "Source implementation and historical checklist; live acceptance is separate."
   },
   {
@@ -129,8 +129,8 @@
     "enabled": true,
     "test_mode": "isolated",
     "test_result": "not_run",
-    "notes": "",
-    "priority": "later",
+    "notes": "2026-10-29 realignment: see ACCEPTANCE_STATUS.md for current isolated/live acceptance and blockers. Continuous WhatsApp monitoring/direct sends deferred.",
+    "priority": "now",
     "evidence": "Source implementation and historical checklist; live acceptance is separate."
   },
   {
@@ -147,8 +147,8 @@
     "enabled": true,
     "test_mode": "isolated",
     "test_result": "not_run",
-    "notes": "",
-    "priority": "later",
+    "notes": "2026-10-29 realignment: see ACCEPTANCE_STATUS.md for current isolated/live acceptance and blockers. Continuous WhatsApp monitoring/direct sends deferred.",
+    "priority": "now",
     "evidence": "Source implementation and historical checklist; live acceptance is separate."
   },
   {
@@ -258,8 +258,8 @@
     "enabled": true,
     "test_mode": "isolated",
     "test_result": "not_run",
-    "notes": "",
-    "priority": "later",
+    "notes": "2026-10-29 realignment: see ACCEPTANCE_STATUS.md for current isolated/live acceptance and blockers. Continuous WhatsApp monitoring/direct sends deferred.",
+    "priority": "now",
     "evidence": "Source implementation and historical checklist; live acceptance is separate."
   },
   {
@@ -276,8 +276,8 @@
     "enabled": true,
     "test_mode": "isolated",
     "test_result": "not_run",
-    "notes": "",
-    "priority": "later",
+    "notes": "2026-10-29 realignment: see ACCEPTANCE_STATUS.md for current isolated/live acceptance and blockers. Continuous WhatsApp monitoring/direct sends deferred.",
+    "priority": "now",
     "evidence": "Source implementation and historical checklist; live acceptance is separate."
   },
   {
@@ -312,7 +312,7 @@
     "enabled": true,
     "test_mode": "isolated",
     "test_result": "not_run",
-    "notes": "",
+    "notes": "2026-10-29 realignment: see ACCEPTANCE_STATUS.md for current isolated/live acceptance and blockers. Continuous WhatsApp monitoring/direct sends deferred.",
     "priority": "now",
     "evidence": ""
   },
@@ -373,7 +373,7 @@
     "test_mode": "isolated",
     "test_result": "not_run",
     "notes": "",
-    "priority": "next",
+    "priority": "later",
     "evidence": ""
   },
   {
@@ -394,7 +394,7 @@
     "test_mode": "isolated",
     "test_result": "not_run",
     "notes": "",
-    "priority": "next",
+    "priority": "later",
     "evidence": ""
   },
   {
@@ -430,7 +430,7 @@
     "test_mode": "isolated",
     "test_result": "not_run",
     "notes": "",
-    "priority": "next",
+    "priority": "later",
     "evidence": ""
   },
   {
@@ -447,8 +447,8 @@
     "enabled": true,
     "test_mode": "isolated",
     "test_result": "not_run",
-    "notes": "",
-    "priority": "later",
+    "notes": "2026-10-29 realignment: see ACCEPTANCE_STATUS.md for current isolated/live acceptance and blockers. Continuous WhatsApp monitoring/direct sends deferred.",
+    "priority": "now",
     "evidence": ""
   },
   {
@@ -660,5 +660,44 @@
     "notes": "",
     "priority": "later",
     "evidence": ""
+  },
+  {
+    "id": "browser-extension",
+    "title": "Optional browser extension bridge",
+    "phase": "8 Future capabilities",
+    "origin": "Requested later",
+    "status": "planned",
+    "difficulty": "high",
+    "description": "Chrome/Edge extension paired to a local native host. Share a selected signed-in tab using bounded DOM observations and typed actions; reuse Derek confirmations, stop controls and durable journals. Does not control native WhatsApp.",
+    "next_step": "Read-only tab grant first, then reviewed fill/click/select with exact tab, document and origin checks. Acceptance: revoked grants/navigation cancel actions; protected fields and drafts remain untouched; restarts never replay sends.",
+    "owner_action": "Later: install the extension and explicitly grant the selected tab or supported site. Telegram cannot grant browser permission.",
+    "dependencies": [],
+    "enabled": false,
+    "test_mode": "none",
+    "test_result": "not_run",
+    "notes": "Debate: semantic DOM access is more reliable than OCR, but normal-profile privacy and weaker network isolation increase risk. No all-sites access, cookie export, arbitrary JavaScript, debugging ports or authentication automation. Native messaging allowlists exact extension ID; execution state stays in Derek.",
+    "priority": "later",
+    "evidence": "Planning review only; not implemented. Chrome docs: https://developer.chrome.com/docs/extensions/develop/concepts/activeTab and https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging"
+  },
+  {
+    "id": "whatsapp-web",
+    "title": "WhatsApp messaging through dedicated Brave profile",
+    "phase": "5 Desktop and browser",
+    "origin": "Requested later",
+    "status": "implemented",
+    "difficulty": "high",
+    "description": "Linked local Brave profile, exact recipient/message confirmation, DOM sender and outgoing IDs, pause controls and durable no-replay journal. New chat/Telegram/voice requests prefer Brave Web; legacy native snapshots retain their transport.",
+    "next_step": "Accept the corrected final receipt check with the next genuinely requested message. Do not resend the existing stopped test. Reply monitoring remains deferred.",
+    "owner_action": "Keep WhatsApp active on the primary phone. Relink through Settings when requested and close setup windows before sending.",
+    "dependencies": [
+      "foundation",
+      "browser"
+    ],
+    "enabled": true,
+    "test_mode": "isolated",
+    "test_result": "passed",
+    "notes": "Observed WhatsApp Web socket on port 5222 and current tail-out marker supported. Contact tiles exclude message search hits. Existing drafts, wrong recipients, ambiguous contacts, uncertain results and revoked access stop execution.\n2026-10-29 realignment: see ACCEPTANCE_STATUS.md for current isolated/live acceptance and blockers. Continuous WhatsApp monitoring/direct sends deferred.",
+    "priority": "next",
+    "evidence": "Owner linked and closed the dedicated profile. Session survived reopenings. Derek alone sent the exact MSV Krishna introduction at 11:32 on 27 Oct 2026; read-only code verified it afterward. Original run a613887c-f2d6-4639-ae51-73535e5833f3 remains needs_attention because the first receipt selector failed. Corrected receipt logic covered by real DOM fixtures; no duplicate live test send."
   }
 ]

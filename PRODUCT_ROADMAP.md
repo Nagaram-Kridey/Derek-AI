@@ -1,3 +1,11 @@
+# Current acceptance and realignment - 29 October 2026
+
+See [ACCEPTANCE_STATUS.md](ACCEPTANCE_STATUS.md) for the single current summary of implementation, isolated tests, live evidence and blockers. This supersedes older acceptance claims below. Current priority: core reliability; messaging monitoring/direct sends, cloud/phone and new desktop capabilities are deferred.
+
+## Interface and scope review — 29 October 2026
+
+[FEATURE_REVIEW.md](FEATURE_REVIEW.md) records the red/blue debate, recommendations for all 37 catalog items and the next acceptance sequence. Keep core capabilities, simplify their daily presentation, defer expansion, and archive multi-user as outside the active personal-product scope. These are recommendations, not removals or changes to the owner-edited board. The redesigned shell, Today page and roadmap review are implemented. Production build, 9 frontend tests and Settings rendering checks passed. Mobile/keyboard and live browser acceptance remain pending because local browser use is disabled in Codex Work settings. Historical item statuses below do not supersede current acceptance evidence.
+
 # Derek — complete product roadmap
 
 Snapshot: 2026-10-24. This inventory consolidates the original plan and later requests. Implemented means code exists; verified requires recorded acceptance evidence. Historical checklist entries describe their date, not necessarily current configuration.
@@ -6,7 +14,7 @@ Snapshot: 2026-10-24. This inventory consolidates the original plan and later re
 
 Open **Roadmap** in Derek. Changes are owner-scoped and saved in the application database. The board starts from this catalog once; later catalog edits never overwrite your custom board. Use Save changes, then Export JSON for a portable copy or Copy prompt to hand a feature to Codex. Unsaved edits are marked. Stale saves are rejected.
 
-Planning enabled/disabled controls inclusion in generated prompts. Test mode and Queue test plan record intentions only. They do not run commands, activate features, or grant permissions. Verified/passed requires evidence. Runtime feature switches and an isolated execution runner are separate future blocks.
+Planning enabled/disabled controls inclusion in generated prompts. Test mode and Mark test planned record intentions only. They do not run commands, activate features, or grant permissions. Verified/passed requires evidence. Runtime feature switches and an isolated execution runner are separate future blocks.
 
 Additional controls: search/status filters, dependency validation, priority selection, evidence/results tracking, duplicate blocks, archive-by-disabling, JSON export and printable visual roadmap. No automatic prompt execution. Do not put credentials in roadmap notes.
 
@@ -355,3 +363,19 @@ Additional controls: search/status filters, dependency validation, priority sele
 - [Phone setup](PHONE_SETUP.md)
 
 ![Roadmap overview](docs/roadmap.svg)
+
+
+## Planned: optional browser extension bridge (2026-10-27)
+
+Chrome/Edge extension with an explicitly shared tab and a locally paired native host. First deliver read-only bounded DOM observations; later add reviewed fill/click/select using the existing action journal, confirmations, stop controls and audit trail. This is planned, not enabled.
+
+Debate outcome: semantic DOM access can reduce OCR/focus errors and separate-profile sign-in friction, but a personal browser profile exposes sensitive state and lacks the Playwright runner's network isolation. Keep both transports. No arbitrary JavaScript, cookie export, all-site permissions or remote-debugging ports. It does not control WhatsApp Desktop.
+
+Acceptance: reject unpaired senders; revoke on navigation/tab/document changes; protect passwords and existing drafts; prevent replay after restart; verify fixture form outcomes and honest disconnect status. Telegram can use only previously granted scopes; Chrome activeTab requires a local user gesture. Sources: [activeTab](https://developer.chrome.com/docs/extensions/develop/concepts/activeTab), [native messaging](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging).
+
+
+## Implemented: dedicated Brave WhatsApp Web transport (2026-10-27)
+
+Owner linked the isolated local profile. New confirmed sends use Brave Web from chat, Telegram or voice. Setup/status controls are in local Settings. The session persists across browser restarts; expired sessions request manual relinking. Existing drafts, ambiguous contacts and uncertain sends stop execution. The existing Windows/native transport is retained for old snapshots.
+
+Derek alone sent the exact MSV Krishna introduction at 11:32. The first final receipt check failed; a separate read-only check confirmed the outgoing message and empty composer. Live marker and search-hit differences were fixed. The original run remains needs_attention, and fresh automatic final-receipt acceptance waits for the next legitimate message rather than sending a duplicate test. Reply watching remains deferred. The browser extension remains a separate planned feature.

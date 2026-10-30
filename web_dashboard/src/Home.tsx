@@ -57,18 +57,19 @@ export function Home({
     <div className="stack home-page">
       <section className="day-hero">
         <div>
-          <span className="eyebrow">YOUR DAY, WITH A LITTLE MORE SPACE</span>
+          <span className="eyebrow">TODAY WITH DEREK</span>
           <h2>
             Good {hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}, {username}.
           </h2>
-          <p>Pick up a thought, check a routine, or let Derek help with what comes next.</p>
+          <p>Start a conversation, review a saved request or check what is scheduled next.</p>
           <button className="button primary" onClick={() => navigate('chat')}>
-            Talk to Derek
+            Ask Derek
             <Icon name="arrow" size={16} />
           </button>
         </div>
-        <div className="hero-symbol" aria-hidden="true">
-          <Icon name="spark" size={70} />
+        <div className="day-shortcuts" aria-label="Quick actions">
+          <button onClick={() => navigate('commands')}><Icon name="check" size={18} /><span>Review requests<small>Confirm actions and follow progress</small></span><Icon name="chevron" size={14} /></button>
+          <button onClick={() => navigate('automations')}><Icon name="clock" size={18} /><span>Plan a reminder<small>View schedules and recurring work</small></span><Icon name="chevron" size={14} /></button>
         </div>
       </section>
       <ErrorNotice message={error || tasks.error || reports.error || commands.error || notifications.error} />
@@ -80,7 +81,7 @@ export function Home({
         </button>
         <button className="stat-card" onClick={() => navigate('commands')}>
           <Icon name="chat" />
-          <strong>{active.length}</strong>
+          <strong>{commands.data ? active.length : '—'}</strong>
           <span>In progress / review</span>
         </button>
         <button className="stat-card" onClick={() => navigate('reports')}>
@@ -90,7 +91,7 @@ export function Home({
         </button>
         <button className="stat-card" onClick={() => navigate('activity')}>
           <Icon name="activity" />
-          <strong>{unread.length}</strong>
+          <strong>{notifications.data ? unread.length : '—'}</strong>
           <span>Unread updates</span>
         </button>
       </div>
@@ -112,7 +113,7 @@ export function Home({
         <section className="panel">
           <div className="section-heading">
             <div>
-              <span className="eyebrow">ON THE HORIZON</span>
+              <span className="eyebrow">SCHEDULE</span>
               <h3>Next up</h3>
             </div>
             <button className="text-button" onClick={() => navigate('automations')}>
@@ -136,7 +137,7 @@ export function Home({
               </div>
             ))
           ) : (
-            <Empty icon="clock" title="A little room in your schedule">
+            <Empty icon="clock" title="No upcoming reminders">
               Create a reminder or a recurring task when you need one.
             </Empty>
           )}
@@ -144,7 +145,7 @@ export function Home({
         <section className="panel">
           <div className="section-heading">
             <div>
-              <span className="eyebrow">FROM YOUR ASSISTANT</span>
+              <span className="eyebrow">INBOX</span>
               <h3>Latest updates</h3>
             </div>
             {!!unread.length && (
@@ -176,11 +177,11 @@ export function Home({
       <section className="panel">
         <div className="section-heading">
           <div>
-            <span className="eyebrow">QUIETLY WORKING IN THE BACKGROUND</span>
-            <h3>Your assistant's status</h3>
+            <span className="eyebrow">CONNECTIONS</span>
+            <h3>Service status</h3>
           </div>
-          <button className="text-button" onClick={() => navigate('features')}>
-            Explore features
+          <button className="text-button" onClick={() => navigate('settings')}>
+            Check connections
             <Icon name="chevron" size={12} />
           </button>
         </div>
@@ -190,7 +191,6 @@ export function Home({
         <div className="health-grid">
           {status?.runtime?.services?.length ? (
             status.runtime.services
-              .filter((service) => service.id !== 'companion' || status.desktop_online)
               .map((service) => (
                 <div className="health-item" key={service.id}>
                   <span
@@ -214,7 +214,7 @@ export function Home({
                 <span className={`health-dot ${status?.scheduler_online ? 'good' : 'warm'}`} />
                 <div>
                   <strong>Background schedules</strong>
-                  <small>{status?.scheduler_online ? 'Ready' : 'Waiting for scheduler'}</small>
+                  <small>{!status ? 'Checking connection...' : status.scheduler_online ? 'Connected' : 'Waiting for scheduler'}</small>
                 </div>
               </div>
               <div className="health-item">

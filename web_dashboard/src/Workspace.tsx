@@ -22,6 +22,7 @@ export function Settings({
   const [name, setName] = useState('Windows companion');
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [showVoiceToken, setShowVoiceToken] = useState(false);
+  const [whatsappNotice, setWhatsappNotice] = useState('');
   async function perform(action: () => Promise<unknown>) {
     setBusy(true);
     setError(null);
@@ -123,6 +124,23 @@ export function Settings({
             <Badge status={status.runtime.backup?.status || 'pending'} />
           </div>
           <div className="list-row"><div><strong>Screen observation</strong><p className="muted">Open a local consent window to preview one app’s accessible controls. No screenshots, model uploads or mouse input.</p></div><button className="button secondary small" disabled={busy || status.runtime.supervisor_status !== 'running'} onClick={() => perform(() => api.post('/v1/local/screen/',{}))}>Open local preview</button></div>
+          <div className="list-row">
+            <div><strong>WhatsApp Web in Brave</strong>
+              <p className="muted">Uses a separate local profile. Link it on your phone, then close its setup windows before asking Derek to send.</p>
+              {whatsappNotice && <p role="status">{whatsappNotice}</p>}
+            </div>
+            <div className="actions">
+              <button className="button secondary small" disabled={busy} onClick={() => perform(async () => {
+                const result = await api.post<{message:string}>('/v1/local/whatsapp/', {});
+                setWhatsappNotice(result.message);
+              })}>Open WhatsApp setup</button>
+              <button className="button secondary small" disabled={busy} onClick={() => perform(async () => {
+                const result = await api.request<{installed:boolean; browser_open:boolean; state:string; checked_at?:string}>('/v1/local/whatsapp/');
+                setWhatsappNotice(!result.installed ? 'Brave is not installed.' : result.browser_open ? 'Dedicated browser is open. Close it after linking so Derek can use it.'
+                  : `Last connection check: ${result.state.replaceAll('_',' ')}${result.checked_at ? ' · '+dateLabel(result.checked_at) : ''}. Sending checks the session again.`);
+              })}>Check setup</button>
+            </div>
+          </div>
         </section>
       )}
       <section className="panel">

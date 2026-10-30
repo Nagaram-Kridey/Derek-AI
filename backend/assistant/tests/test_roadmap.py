@@ -15,7 +15,8 @@ def test_seed_and_cycle_validation():
 
 def test_owner_board_and_stale_save(client, user):
     first = client.get('/v1/roadmap/').json()
-    assert len(first['items']) == 35
+    assert len(first['items']) == 37
+    assert next(item for item in first['items'] if item['id']=='browser-extension')['status']=='planned'
     change = deepcopy(first)
     change['items'][0]['notes'] = 'Owner acceptance pending'
     assert client.put('/v1/roadmap/', change, format='json').status_code == 200
@@ -23,7 +24,7 @@ def test_owner_board_and_stale_save(client, user):
     assert client.get('/v1/roadmap/').json()['items'][0]['notes'] == 'Owner acceptance pending'
     other = get_user_model().objects.create_user(username='other')
     client.force_authenticate(other)
-    assert client.get('/v1/roadmap/').json()['items'][0]['notes'] == ''
+    assert client.get('/v1/roadmap/').json()['items'][0]['notes'] == first['items'][0]['notes']
     assert APIClient().get('/v1/roadmap/').status_code in (401, 403)
 
 

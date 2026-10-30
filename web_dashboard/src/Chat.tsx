@@ -16,6 +16,24 @@ import type {
 } from './types';
 import { ErrorNotice, Icon, Loading, dateLabel, useResource } from './ui';
 
+function TelegramOutput({ api, commandId }: { api: Api; commandId: string }) {
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  async function send() {
+    setBusy(true);
+    try {
+      const result = await api.post<{ deliveries: { status: string }[] }>(`/v1/commands/${commandId}/telegram/`, {});
+      setNotice(result.deliveries.every(row => row.status === 'sent') ? 'Delivered to Telegram'
+        : result.deliveries.some(row => row.status === 'needs_attention') ? 'Delivery uncertain — check Telegram and Activity'
+        : 'Queued for Telegram — view delivery in Activity');
+    } catch (error) { setNotice(errorMessage(error)); }
+    finally { setBusy(false); }
+  }
+  return <><button className="text-button copy-answer" disabled={busy} onClick={send}>
+    {busy ? 'Queueing…' : 'Send reply to Telegram'}
+  </button>{notice && <small role="status">{notice}</small>}</>;
+}
+
 export function ProposalCard({
   api,
   initial,
@@ -88,8 +106,8 @@ export function ProposalCard({
 
 function Citations({ citations }: { citations?: Citation[] }) {
   return citations?.length ? (
-    <div className="sources">
-      <span>Sources</span>
+    <details className="sources">
+      <summary>Sources ({citations.length})</summary>
       {citations.map((source, index) => {
         const href = safeHttpUrl(source.url);
         return href ? (
@@ -100,7 +118,7 @@ function Citations({ citations }: { citations?: Citation[] }) {
           </a>
         ) : null;
       })}
-    </div>
+    </details>
   ) : null;
 }
 function SearchSuggestions({ html }: { html?: string[] }) {
@@ -530,6 +548,11 @@ export function Chat({
       setError(errorMessage(error));
     }
   }
+  const [copiedReply, setCopiedReply] = useState<number | null>(null);
+  async function copyReply(text: string, index: number) {
+    try { await navigator.clipboard.writeText(text); setCopiedReply(index); }
+    catch { setError('Could not copy. Select the answer text to copy it.'); }
+  }
   const blocked = busy || !!pending || recording || loading;
   return (
     <div className="chat-layout">
@@ -558,7 +581,7 @@ export function Chat({
                   {message.created_at && <time>{dateLabel(message.created_at)}</time>}
                 </div>
                 {message.role === 'assistant' ? (
-                  <Markdown text={message.content} />
+                  <><Markdown text={message.content} /><div className="reply-actions"><button className="text-button" onClick={() => void copyReply(message.content, index)}>{copiedReply === index ? 'Copied' : 'Copy answer'}</button></div></>
                 ) : (
                   <p className="message-content">{message.content}</p>
                 )}
@@ -595,6 +618,10 @@ export function Chat({
                   <button className="text-button copy-answer" onClick={() => copy(message.content, index)}>
                     {copied === index ? 'Copied' : 'Copy reply'}
                   </button>
+                )}
+                {message.role === 'assistant' && message.command_id && message.status === 'completed'
+                  && !message.action_proposals?.length && (
+                    <TelegramOutput api={api} commandId={message.command_id} />
                 )}
               </article>
             ))

@@ -110,6 +110,32 @@ export function Automations({ api, refresh, changed }: { api: Api; refresh: numb
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
+  const [whatsApp, setWhatsApp] = useState(false);
+  const [recipient, setRecipient] = useState('');
+  const [message, setMessage] = useState('');
+  async function draftWhatsApp() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.post('/v1/workflows/', {
+        name: `WhatsApp message to ${recipient.trim()}`,
+        description: 'Use the dedicated Brave WhatsApp Web profile to send the reviewed message once.',
+        trigger: { kind: 'manual' },
+        allowed_tools: ['desktop.whatsapp'], allowed_domains: [], allowed_paths: [],
+        steps: [{ tool: 'desktop.whatsapp', args: {
+          recipient: recipient.trim(), message, open_and_search: true, transport: 'brave_web',
+        } }],
+      });
+      setWhatsApp(false);
+      setRecipient('');
+      setMessage('');
+      changed();
+    } catch (error) {
+      setError(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
   async function act(path: string, method = 'POST') {
     setBusy(true);
     setError(null);
@@ -141,6 +167,9 @@ export function Automations({ api, refresh, changed }: { api: Api; refresh: numb
           <p className="muted">Small reminders and reviewed workflows that make room in your day.</p>
         </div>
         <div className="actions">
+          <button className="button secondary" onClick={() => setWhatsApp(true)}>
+            WhatsApp message
+          </button>
           <button className="button secondary" onClick={() => setWorkflowEditor('new')}>
             <Icon name="plus" size={16} />
             Draft workflow
@@ -152,6 +181,21 @@ export function Automations({ api, refresh, changed }: { api: Api; refresh: numb
         </div>
       </div>
       <ErrorNotice message={error || tasks.error || workflows.error || approvals.error || runs.error} />
+      {whatsApp && (
+        <Modal title="Draft a WhatsApp message" close={() => setWhatsApp(false)}>
+          <p>Keep Windows unlocked and WhatsApp signed in. Derek opens the app and searches for an exact contact name. Duplicate names, drafts or uncertain text stop the run for review.</p>
+          <p>This saves a draft workflow. Review, enable and run it from this page when ready.</p>
+          <label>Exact recipient name
+            <input value={recipient} maxLength={100} onChange={(event) => setRecipient(event.target.value)} />
+          </label>
+          <label>Message
+            <input value={message} maxLength={2000} onChange={(event) => setMessage(event.target.value)} />
+          </label>
+          <ErrorNotice message={error} />
+          <button className="button primary" disabled={busy || !recipient.trim() || !message.trim()}
+            onClick={() => void draftWhatsApp()}>Save for review</button>
+        </Modal>
+      )}
       {!!approvals.data?.length && (
         <section className="panel">
           <h3>Your approval is needed</h3>

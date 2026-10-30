@@ -168,10 +168,13 @@ def execute_run(run_id):
         if run.step_index >= len(run.snapshot["steps"]):
             run.status = "completed"
             run.save()
+            from .services import ONE_OFF_WHATSAPP
+            if run.workflow and run.workflow.description==ONE_OFF_WHATSAPP:
+                m.Workflow.objects.filter(pk=run.workflow_id).update(enabled=False)
             return
         step = run.snapshot["steps"][run.step_index]
         if step["tool"] in DESKTOP_TOOLS:
-            m.DesktopJob.objects.get_or_create(run=run, step_index=run.step_index, defaults={"user": run.user, "tool": step["tool"], "args": step["args"], "policy": {"allowed_paths": run.snapshot["allowed_paths"], "allowed_domains": run.snapshot["allowed_domains"]}})
+            m.DesktopJob.objects.get_or_create(run=run, step_index=run.step_index, defaults={"user": run.user, "tool": step["tool"], "args": step["args"], "policy": {"allowed_tools": run.snapshot['allowed_tools'], "allowed_paths": run.snapshot["allowed_paths"], "allowed_domains": run.snapshot["allowed_domains"]}})
             run.status = "waiting_desktop"
             run.save()
             return
@@ -358,8 +361,16 @@ def deliver_command(delivery_id):
         row = m.Delivery.objects.select_for_update().select_related("user").get(pk=delivery_id)
         if row.status != "pending" or row.due_at > timezone.now():
             return
+        if row.created_at < timezone.now()-timedelta(hours=24):
+            row.status,row.error='needs_attention','This queued reply is over 24 hours old. Review before sending; no automatic replay.'
+            row.save(update_fields=['status','error'])
+            return
         m.AssistantState.objects.select_for_update().get_or_create(user=row.user)
         previous = m.Delivery.objects.filter(command_id=row.command_id, position__lt=row.position).exclude(status="sent")
+        if row.position>=1000 and m.ActionExecution.objects.filter(command_id=row.command_id,tool='send_whatsapp_message').exists():
+            # Status notices stand alone. Never replay the uncertain earlier
+            # bubble, but do not suppress a later stopped/completed result.
+            previous=previous.exclude(status='needs_attention')
         if previous.filter(status="needs_attention").exists():
             row.status, row.error = "needs_attention", "An earlier message has an uncertain outcome. Check Telegram."
             row.save(update_fields=["status", "error"])
@@ -374,6 +385,10 @@ def deliver_command(delivery_id):
                 transaction.on_commit(lambda: deliver_command.apply_async(args=[str(row.id)], countdown=2))
             return
         row.status, row.started_at = "sending", timezone.now()
+        proposals=m.ActionProposal.objects.filter(action__command_id=row.command_id)
+        if (proposals.exists() and not proposals.filter(status='pending',expires_at__gt=timezone.now()).exists()
+                and any(p.readback in row.text for p in proposals)):
+            row.text='That confirmation is no longer active. No new action was started. Send your request again for a fresh confirmation.'
         row.save(update_fields=["status", "started_at"])
     try:
         reply_markup = None
@@ -423,6 +438,11 @@ def process_telegram(update_id):
                 m.Delivery.objects.get_or_create(user=user, command=origin, position=1000 + proposal.revision,
                                                 defaults={"destination": callback["chat_id"], "text": outcome.get("message", "Check the saved action outcome in the dashboard.")})
                 answer = "The saved result is being delivered."
+                run_id=outcome.get('run_id')
+                if run_id:
+                    saved=m.WorkflowRun.objects.filter(user=user,pk=run_id).first()
+                    if saved and saved.status in {'needs_attention','failed','cancelled','completed'}:
+                        answer=('Already confirmed. Desktop '+saved.status.replace('_',' ')+'. '+saved.error)[:160]
             except ValueError as exc:
                 answer = str(exc)[:160]
             try:

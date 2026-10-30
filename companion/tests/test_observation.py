@@ -130,3 +130,20 @@ def test_permission_expiring_during_reader_cleanup_prevents_display():
         session.process.join.side_effect=lambda **_:setattr(clock,'return_value',121)
         with pytest.raises(ObservationError,match='expired'):session.read_result(session.generation)
     assert session.scope is None
+
+
+def test_only_whatsapp_owned_webview_children_join_scope():
+    from desktop.observation import scoped_processes
+    child=Mock(pid=789);child.name.return_value='msedgewebview2.exe';child.create_time.return_value=101
+    unrelated=Mock(pid=790);unrelated.name.return_value='other.exe'
+    parent=Mock();parent.children.return_value=[child,unrelated]
+    scope=WindowScope(123,456,100,'C:/WhatsApp.Root.exe')
+    with patch('psutil.Process',return_value=parent):
+        assert scoped_processes(scope)=={456:100,789:101}
+        assert scoped_processes(SCOPE)=={456:100}
+
+
+def test_recycled_child_pid_is_not_in_observation_scope():
+    from desktop.observation import process_matches
+    with patch('psutil.Process',return_value=Mock(create_time=Mock(return_value=999))):
+        assert not process_matches(789,{789:101})

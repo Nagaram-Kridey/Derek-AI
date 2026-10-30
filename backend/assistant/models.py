@@ -289,3 +289,32 @@ class TelegramUpdate(models.Model):
     status = models.CharField(max_length=24, default="pending")
     started_at = models.DateTimeField(null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class WhatsAppSettings(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    direct_send = models.BooleanField(default=False)
+    auto_watch = models.BooleanField(default=False)
+    aliases = models.JSONField(default=dict)
+
+
+class WhatsAppWatch(Owned):
+    command = models.ForeignKey(Command, on_delete=models.CASCADE)
+    recipient = models.CharField(max_length=100)
+    active = models.BooleanField(default=True)
+    initialized = models.BooleanField(default=False)
+    ack_state = models.CharField(max_length=24, default='armed')
+    device = models.ForeignKey(DesktopDevice, null=True, on_delete=models.SET_NULL)
+    lease_until = models.DateTimeField(null=True)
+    last_checked_at = models.DateTimeField(null=True)
+    state = models.CharField(max_length=24, default='waiting')
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'recipient'], name='unique_whatsapp_watch')]
+
+
+class WhatsAppObservation(models.Model):
+    watch = models.ForeignKey(WhatsAppWatch, on_delete=models.CASCADE)
+    receipt = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['watch', 'receipt'], name='unique_whatsapp_observation')]
