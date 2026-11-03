@@ -1,27 +1,33 @@
-import { Component, useCallback, useEffect, useMemo, useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
+import { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Api, errorMessage } from './api';
+import { Login } from './Login';
+import type { Session } from './Login';
+import { Images } from './Images';
+import { Analytics } from './Analytics';
 import { Automations } from './Automations';
 import { Chat } from './Chat';
 import { Roadmap } from './Roadmap';
 import { Features } from './Features';
 import { Settings } from './Workspace';
+import { TrialSettings } from './TrialSettings';
 import { Activity } from './Activity';
 import { Home } from './Home';
 import { Commands } from './Commands';
 import { ReportLibrary } from './Reports';
 import { desktopLaunchCode, exchangeDesktopLaunch } from './desktopSession';
 import type { SystemStatus } from './types';
-import { Badge, Brand, ErrorNotice, Icon, useResource } from './ui';
+import { Brand, ErrorNotice, Icon, useResource } from './ui';
 import type { IconName } from './ui';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 const candidateDesktopCode = desktopLaunchCode(window.location.hash);
 const desktopCode = window.location.origin === 'http://127.0.0.1:8000' && !API_BASE ? candidateDesktopCode : null;
 if (candidateDesktopCode) window.history.replaceState(null, '', window.location.pathname + window.location.search + '#chat');
-type Session = { token: string; username: string; remember?: boolean };
-type Page = 'roadmap' | 'home' | 'chat' | 'automations' | 'reports' | 'activity' | 'settings' | 'features' | 'commands';
+type Page = 'images' | 'analytics' | 'roadmap' | 'home' | 'chat' | 'automations' | 'reports' | 'activity' | 'settings' | 'features' | 'commands';
 const pages: { key: Page; name: string; icon: IconName; subtitle: string }[] = [
+  { key: 'images', name: 'Images', icon: 'spark', subtitle: 'Your private generated images.' },
+  { key: 'analytics', name: 'Model analytics', icon: 'activity', subtitle: 'Model performance, response times and issues across tester accounts.' },
   {
     key: 'home',
     name: 'Today',
@@ -80,104 +86,15 @@ function readSession(): Session | null {
   }
 }
 
-function Login({ onLogin, notice }: { onLogin: (session: Session) => void; notice?: string }) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(notice || null);
-  const [busy, setBusy] = useState(false);
-  const [remember, setRemember] = useState(false);
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      onLogin({
-        ...(await new Api('', API_BASE).post<Session>('/v1/auth/login', { username, password })),
-        remember,
-      });
-    } catch (error) {
-      setError(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <main className="login-layout">
-      <section className="login-story">
-        <Brand />
-        <div>
-          <span className="eyebrow light">A PERSONAL ASSISTANT. A LITTLE POSSIBILITY.</span>
-          <h1>
-            Your day,
-            <br />a little lighter.
-          </h1>
-          <p>
-            Space to think. Help to get things done.
-            <br />
-            Meet your everyday companion.
-          </p>
-        </div>
-        <div className="orbit-art" aria-hidden="true">
-          <div className="orbit-ring ring-one" />
-          <div className="orbit-ring ring-two" />
-          <div className="orbit-ring ring-three" />
-          <span className="orbit-center">
-            <Icon name="spark" size={60} />
-          </span>
-          <span className="orbit-dot" />
-        </div>
-        <span className="story-footer">
-          DEREK <span>THOUGHTFULLY AT YOUR SIDE</span>
-        </span>
-      </section>
-      <section className="login-panel">
-        <div className="login-box">
-          <span className="eyebrow">YOUR PERSONAL WORKSPACE</span>
-          <h2>Welcome home.</h2>
-          <p className="muted">Sign in to pick up where you left off.</p>
-          <form onSubmit={submit}>
-            <label>
-              Username
-              <input
-                autoComplete="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                autoFocus
-              />
-            </label>
-            <label>
-              Password
-              <input
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </label>
-            <label className="checkbox-label remember-option">
-              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-              Keep me signed in on this browser
-            </label>
-            <ErrorNotice message={error} />
-            <button className="button primary full" disabled={busy}>
-              {busy ? 'Signing in…' : 'Enter your workspace'}
-              <Icon name="arrow" size={18} />
-            </button>
-          </form>
-          <p className="login-note">Use the account created when your assistant service was set up.</p>
-        </div>
-      </section>
-    </main>
-  );
-}
-
 function Workspace({ session, onLogout }: { session: Session; onLogout: () => void }) {
   const currentPage = () =>
     pages.find((item) => item.key === window.location.hash.slice(1).split('?')[0])?.key || 'chat';
   const [page, updatePage] = useState<Page>(currentPage);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [historyTarget, setHistoryTarget] = useState<HTMLDivElement | null>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const historyTrigger = useRef<HTMLButtonElement>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [todayOpen, setTodayOpen] = useState(false);
   const [settingsFocus, setSettingsFocus] = useState('');
@@ -197,7 +114,38 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
     window.location.hash = value;
     updatePage(value);
     setProfileOpen(false);
+    setMobileSidebarOpen(false);
   };
+  const showChat = useCallback(() => {
+    updatePage('chat');
+    setMobileSidebarOpen(false);
+  }, []);
+  useEffect(() => {
+    if (!mobileSidebarOpen) return;
+    const sidebar = sidebarRef.current;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    sidebar?.querySelector<HTMLButtonElement>('.mobile-sidebar-close')?.focus();
+    const trap = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); setMobileSidebarOpen(false); return; }
+      if (event.key !== 'Tab' || !sidebar) return;
+      const items = [...sidebar.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled)')].filter(item => item.getClientRects().length);
+      const first = items[0], last = items.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    window.addEventListener('keydown', trap);
+    const desktop = matchMedia('(min-width:701px)');
+    const closeOnDesktop = () => { if (desktop.matches) setMobileSidebarOpen(false); };
+    desktop.addEventListener('change', closeOnDesktop);
+    return () => {
+      window.removeEventListener('keydown', trap);
+      desktop.removeEventListener('change', closeOnDesktop);
+      document.body.style.overflow = previousOverflow;
+      if (historyTrigger.current?.getClientRects().length) historyTrigger.current.focus();
+      else sidebarRef.current?.querySelector<HTMLButtonElement>('.sidebar-toggle')?.focus();
+    };
+  }, [mobileSidebarOpen]);
   useEffect(() => {
     const update = () => updatePage(currentPage());
     window.addEventListener('hashchange', update);
@@ -208,8 +156,21 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
   const [loggingOut, setLoggingOut] = useState(false);
   const api = useMemo(() => new Api(session.token, API_BASE, onLogout), [session.token, onLogout]);
   const changed = useCallback(() => setRefresh((value) => value + 1), []);
+  const identity = useResource<{ username: string; email: string; is_admin: boolean; testing_workspace?: boolean }>(api, '/v1/auth/me/', refresh);
+  const isAdmin = !identity.error && identity.data?.is_admin === true;
+  const testingWorkspace = identity.data?.testing_workspace === true;
+  const toolsAvailable = isAdmin && !testingWorkspace;
+  const trialAvailable = testingWorkspace && !!identity.data && !identity.error;
+  const visiblePrimaryPages: Page[] = toolsAvailable ? primaryPages : trialAvailable ? ['chat', 'images', 'reports', 'home'] : ['chat'];
+  useEffect(() => {
+    if (identity.data && (!identity.data.is_admin || testingWorkspace) && page !== 'chat' && page !== 'commands' && page !== 'analytics' && !(testingWorkspace && ['images', 'reports', 'home', 'settings', 'activity'].includes(page))) {
+      window.location.hash = 'chat';
+      updatePage('chat');
+    }
+  }, [identity.data, page, testingWorkspace]);
   const status = useResource<SystemStatus>(api, '/v1/status/', refresh);
   useEffect(() => {
+    if (testingWorkspace || !identity.data) return;
     const timer = setInterval(() => {
       if (!document.hidden) changed();
     }, 10_000);
@@ -221,7 +182,7 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
       clearInterval(timer);
       document.removeEventListener('visibilitychange', foreground);
     };
-  }, [changed]);
+  }, [changed, testingWorkspace, identity.data]);
   async function logout() {
     setLoggingOut(true);
     setAuthError(null);
@@ -243,95 +204,82 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
     return () => cancelAnimationFrame(frame);
   }, [page, settingsFocus]);
   const openSettings = (heading: string) => { setSettingsFocus(heading); setPage('settings'); };
-  const current = pages.find((item) => item.key === page)!;
   return (
-    <div className={`app-shell derek-workspace ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+    <div className={`app-shell derek-workspace ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileSidebarOpen ? 'mobile-sidebar-open' : ''}`}>
       <a className="skip-link" href="#main-content" onClick={(event) => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>Skip to content</a>
-      <aside className="sidebar">
+      {mobileSidebarOpen && <div className="sidebar-scrim" onClick={() => setMobileSidebarOpen(false)} aria-hidden="true" />}
+      <aside className="sidebar" id="workspace-sidebar" ref={sidebarRef} role={mobileSidebarOpen ? 'dialog' : undefined} aria-modal={mobileSidebarOpen || undefined} aria-label="Workspace and conversations">
+        <button className="icon-button mobile-sidebar-close" aria-label="Close conversations" onClick={() => setMobileSidebarOpen(false)}><Icon name="close" /></button>
         <div className="sidebar-brand"><Brand /><button className="icon-button sidebar-toggle" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!sidebarCollapsed}><Icon name="chevron" /></button></div>
-        <nav aria-label="Main navigation">{primaryPages.map(key => pages.find(item => item.key === key)!).map(item => <button key={item.key} className={`nav-item ${page === item.key ? 'selected' : ''}`} aria-label={item.name} title={sidebarCollapsed ? item.name : undefined} aria-current={page === item.key ? 'page' : undefined} onClick={() => setPage(item.key)}><Icon name={item.icon} /><span>{item.name}</span></button>)}</nav>
-        <div className="sidebar-bottom"><small>{status.data?.desktop_online ? 'Companion connected' : 'Companion offline'}</small><p>{session.username}</p></div>
+        <nav aria-label="Main navigation">{visiblePrimaryPages.map(key => pages.find(item => item.key === key)!).map(item => <button key={item.key} className={`nav-item ${page === item.key ? 'selected' : ''}`} aria-label={item.name} title={sidebarCollapsed ? item.name : undefined} aria-current={page === item.key ? 'page' : undefined} onClick={() => setPage(item.key)}><Icon name={item.icon} /><span>{item.name}</span></button>)}</nav>
+        <div className="sidebar-conversations" ref={setHistoryTarget} />
       </aside>
-      <div className="profile-control">
+      <div className="profile-control" inert={mobileSidebarOpen}>
         <button className="button profile-trigger" aria-expanded={profileOpen} aria-controls="profile-options" onClick={() => setProfileOpen(!profileOpen)}><span className="avatar">{session.username.slice(0, 1).toUpperCase()}</span><span>Profile</span></button>
         {profileOpen && <div id="profile-options" className="profile-options" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setProfileOpen(false); }}>
-          <strong>{session.username}</strong>
+          <strong>{identity.data?.username || session.username}</strong>
+          {identity.data?.email && <small>{identity.data.email}</small>}
+          {isAdmin && <button onClick={() => setPage('analytics')}>Model analytics</button>}
           <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>Appearance · {theme === 'dark' ? 'Switch to light' : 'Switch to dark'}</button>
-          <button onClick={() => openSettings('Connections')}>Connections & models</button>
+          <button onClick={() => setPage('commands')}>Request history</button>
+          {trialAvailable && <><button onClick={() => setPage('settings')}>Settings</button><button onClick={() => openSettings('Telegram')}>Telegram</button><button onClick={() => openSettings('Browser voice')}>Voice</button><button onClick={() => setPage('activity')}>Activity & notifications</button></>}
+          {toolsAvailable && <><button onClick={() => openSettings('Connections')}>Connections & models</button>
           <button onClick={() => openSettings('Desktop voice access')}>Voice</button>
           <button onClick={() => openSettings('Your data')}>Privacy & memory</button>
-          <button onClick={() => setPage('commands')}>Request history</button>
           <button onClick={() => setPage('activity')}>Activity & notifications</button>
           <button onClick={() => setPage('features')}>Capabilities</button>
           <button onClick={() => setPage('roadmap')}>Build & roadmap</button>
+          </>}
           <button disabled={loggingOut} onClick={logout}>Sign out</button>
         </div>}
       </div>
-      <main className="main-panel" id="main-content" tabIndex={-1}>
-        <header className="topbar">
-          <div>
-
-            <h1>{current.name}</h1>
-            <p>{current.subtitle}</p>
-          </div>
-          <div className="topbar-meta">
-            <span className="date">
-              {new Intl.DateTimeFormat('en-IN', {
-                month: 'short',
-                day: 'numeric',
-                weekday: 'short',
-                timeZone: 'Asia/Kolkata',
-              }).format(new Date())}
-            </span>
-            <Badge
-              status={
-                status.error
-                  ? 'service unreachable'
-                  : status.data
-                    ? status.data.paused
-                      ? 'automations paused'
-                      : status.data.runtime?.managed
-                        ? 'local service connected'
-                        : 'service connected'
-                    : 'connecting'
-              }
-            />
-          </div>
+      <main className="main-panel" data-page={page} aria-label={pages.find(item => item.key === page)?.name} id="main-content" tabIndex={-1} inert={mobileSidebarOpen}>
+        <header className="topbar topbar-chat">
+          <button className="button mobile-history-trigger" ref={historyTrigger} aria-label="Open conversations" aria-expanded={mobileSidebarOpen} aria-controls="workspace-sidebar" onClick={() => { setSidebarCollapsed(false); setMobileSidebarOpen(true); }}><Icon name="chat" size={18} /> History</button>
         </header>
         <div className="page-content">
-          <ErrorNotice message={authError || status.error} />
+          <ErrorNotice message={authError || identity.error || status.error} />
           {status.data?.paused && (
             <div className="notice warning">
               <Icon name="pause" size={18} /> Automations are paused. Resume them in Settings when you’re
               ready.
             </div>
           )}
-          {page === 'home' && (
+          {page === 'analytics' && (identity.loading ? <p role="status">Checking admin access…</p> : isAdmin ? <Analytics api={api} refresh={refresh} changed={changed} /> : <p role="alert">Admin access is required to view model analytics.</p>)}
+          {(toolsAvailable || trialAvailable) && page === 'home' && (
             <Home
               api={api}
               refresh={refresh}
               changed={changed}
               status={status.data}
               username={session.username}
-              navigate={setPage}
+              navigate={destination => setPage(trialAvailable && destination === 'automations' ? 'commands' : destination)}
             />
           )}{' '}
           {page === 'commands' && <Commands api={api} refresh={refresh} changed={changed} />}{' '}
-          {page === 'chat' && (
-            <div className={`conversation-layout ${todayOpen ? 'today-expanded' : ''}`}><div className="conversation-main"><button className="button today-toggle" aria-expanded={todayOpen} aria-controls="chat-today" onClick={() => setTodayOpen(!todayOpen)}>{todayOpen ? 'Hide Today' : 'Show Today'}</button><Chat
+          <div hidden={page !== 'chat'}>
+            <div className={`conversation-layout ${todayOpen ? 'today-expanded' : ''}`}><div className="conversation-main"><button hidden={!toolsAvailable && !trialAvailable} className="button today-toggle" aria-expanded={todayOpen} aria-controls="chat-today" onClick={() => setTodayOpen(!todayOpen)}>{todayOpen ? 'Hide Today' : 'Show Today'}</button><Chat
               api={api}
               refresh={refresh}
               changed={changed}
               onAutomations={() => setPage('automations')}
-              localVoice={status.data?.runtime?.managed}
-            /></div>{todayOpen && <aside id="chat-today" className="chat-today" aria-label="Today"><Home api={api} refresh={refresh} changed={changed} status={status.data} username={session.username} navigate={setPage} /></aside>}</div>
-          )}{' '}
-          {page === 'automations' && <Automations api={api} refresh={refresh} changed={changed} />}{' '}
-          {page === 'reports' && <ReportLibrary api={api} refresh={refresh} changed={changed} />}{' '}
-          {page === 'activity' && <Activity api={api} refresh={refresh} changed={changed} />}{' '}
-          <div hidden={page !== 'roadmap'}><Roadmap api={api} /></div>
-          {page === 'features' && <Features api={api} refresh={refresh} changed={changed} />}{' '}
-          {page === 'settings' && (
+              localVoice={toolsAvailable && status.data?.runtime?.managed}
+              toolsEnabled={toolsAvailable}
+              audioEnabled={toolsAvailable || trialAvailable}
+              testingWorkspace={testingWorkspace}
+              active={page === 'chat'}
+              historyTarget={historyTarget}
+              onNavigateChat={showChat}
+            /></div>{(toolsAvailable || trialAvailable) && todayOpen && <aside id="chat-today" className="chat-today" aria-label="Today"><Home api={api} refresh={refresh} changed={changed} status={status.data} username={session.username} navigate={destination => setPage(trialAvailable && destination === 'automations' ? 'commands' : destination)} /></aside>}</div>
+          </div>{' '}
+          {toolsAvailable && page === 'automations' && <Automations api={api} refresh={refresh} changed={changed} />}{' '}
+          {trialAvailable && page === 'images' && <Images api={api} refresh={refresh} changed={changed} />}
+          {(toolsAvailable || trialAvailable) && page === 'reports' && <ReportLibrary api={api} refresh={refresh} changed={changed} allowTelegramDelivery={!testingWorkspace} />}{' '}
+          {(toolsAvailable || trialAvailable) && page === 'activity' && <Activity api={api} refresh={refresh} changed={changed} />}{' '}
+          {toolsAvailable && <div hidden={page !== 'roadmap'}><Roadmap api={api} /></div>}
+          {toolsAvailable && page === 'features' && <Features api={api} refresh={refresh} changed={changed} />}{' '}
+          {trialAvailable && page === 'settings' && <TrialSettings api={api} refresh={refresh} changed={changed} />}
+          {toolsAvailable && page === 'settings' && (
             <Settings api={api} refresh={refresh} changed={changed} status={status.data} />
           )}
         </div>
@@ -342,7 +290,7 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
           <span>All times in Asia/Kolkata</span>
         </footer>
       </main>
-      <nav className="bottom-navigation" aria-label="Main navigation">{primaryPages.map(key => pages.find(item => item.key === key)!).map(item => <button key={item.key} aria-current={page === item.key ? 'page' : undefined} onClick={() => setPage(item.key)}><Icon name={item.icon} /><span>{item.name}</span></button>)}</nav>
+      <nav className="bottom-navigation" aria-label="Main navigation" inert={mobileSidebarOpen}>{visiblePrimaryPages.map(key => pages.find(item => item.key === key)!).map(item => <button key={item.key} aria-current={page === item.key ? 'page' : undefined} onClick={() => setPage(item.key)}><Icon name={item.icon} /><span>{item.name}</span></button>)}</nav>
     </div>
   );
 }

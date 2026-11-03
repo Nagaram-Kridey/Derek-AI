@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { FormEvent } from 'react';
 import { Api, errorMessage, safeHttpUrl } from './api';
 import { readChat, saveChat, stateKey } from './chatState';
 import type { ChatState } from './chatState';
 import { Markdown } from './Markdown';
+import { Images } from './Images';
+import { OrbitStage } from './OrbitStage';
 import type {
   ActionProposal,
   Artifact,
@@ -14,24 +17,18 @@ import type {
   Message,
   Turn,
 } from './types';
-import { ErrorNotice, Icon, Loading, dateLabel, useResource } from './ui';
+import { ErrorNotice, Icon, Loading, useResource } from './ui';
 
-function TelegramOutput({ api, commandId }: { api: Api; commandId: string }) {
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState('');
+function SendAnswer({ api, commandId }: { api: Api; commandId: string }) {
+  const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [error, setError] = useState('');
   async function send() {
-    setBusy(true);
-    try {
-      const result = await api.post<{ deliveries: { status: string }[] }>(`/v1/commands/${commandId}/telegram/`, {});
-      setNotice(result.deliveries.every(row => row.status === 'sent') ? 'Delivered to Telegram'
-        : result.deliveries.some(row => row.status === 'needs_attention') ? 'Delivery uncertain — check Telegram and Activity'
-        : 'Queued for Telegram — view delivery in Activity');
-    } catch (error) { setNotice(errorMessage(error)); }
-    finally { setBusy(false); }
+    if (state !== 'idle') return;
+    setState('sending'); setError('');
+    try { await api.post('/v1/telegram/send/', { command_id: commandId }); setState('sent'); }
+    catch (failure) { setError(errorMessage(failure)); setState('idle'); }
   }
-  return <><button className="text-button copy-answer" disabled={busy} onClick={send}>
-    {busy ? 'Queueing…' : 'Send reply to Telegram'}
-  </button>{notice && <small role="status">{notice}</small>}</>;
+  return <><button type="button" className="icon-button answer-copy" aria-label={state === 'sent' ? 'Sent to Telegram' : state === 'sending' ? 'Sending to Telegram' : 'Send answer to Telegram'} title={state === 'sent' ? 'Sent to Telegram' : 'Send to your Telegram chat'} disabled={state !== 'idle'} onClick={() => void send()}>{state === 'sent' ? <Icon name="check" size={16} /> : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z M22 2 11 13" /></svg>}</button>{error && <small role="alert">{error}</small>}<span className="sr-only" role="status">{state === 'sent' ? 'Answer sent to Telegram' : ''}</span></>;
 }
 
 export function ProposalCard({
@@ -217,17 +214,29 @@ export function Chat({
   changed,
   onAutomations,
   localVoice = false,
+  toolsEnabled = true,
+  audioEnabled = toolsEnabled,
+  testingWorkspace = false,
+  active = true,
+  historyTarget,
+  onNavigateChat,
 }: {
   api: Api;
   refresh: number;
   changed: () => void;
   onAutomations: () => void;
   localVoice?: boolean;
+  toolsEnabled?: boolean;
+  audioEnabled?: boolean;
+  testingWorkspace?: boolean;
+  active?: boolean;
+  historyTarget?: HTMLElement | null;
+  onNavigateChat?: () => void;
 }) {
   const key = stateKey(api.token, api.base);
   const stored = useRef<ChatState>(readChat(key));
   const conversations = useResource<Conversation[]>(api, '/v1/conversations/', refresh);
-  const [conversation, setConversation] = useState<Identifier | null>(stored.current.conversation);
+  const [conversation, setConversation] = useState<Identifier | null>(stored.current.pending ? stored.current.conversation : null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [audio, setAudio] = useState<File | null>(null);
@@ -237,17 +246,39 @@ export function Chat({
   const [pending, setPending] = useState(stored.current.pending);
   const [phase, setPhase] = useState('');
   const [recording, setRecording] = useState(false);
-  const [copied, setCopied] = useState<number | null>(null);
   const [historySearch, setHistorySearch] = useState('');
   const recorder = useRef<MediaRecorder | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const recorderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const transcriptEnd = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const field = input.current;
+    if (!field) return;
+    const resize = () => {
+      field.style.height = 'auto';
+      field.style.height = `${Math.min(field.scrollHeight, 180)}px`;
+      field.style.overflowY = field.scrollHeight > 180 ? 'auto' : 'hidden';
+    };
+    resize();
+    // Observe available width, so wrapped lines also resize after layout changes.
+    let lastWidth = field.clientWidth;
+    const widthObserver = new ResizeObserver(() => {
+      if (field.clientWidth !== lastWidth) { lastWidth = field.clientWidth; resize(); }
+    });
+    widthObserver.observe(field);
+    return () => widthObserver.disconnect();
+  }, [text, audio, messages.length, pending]);
+
   const fileInput = useRef<HTMLInputElement>(null);
   const operation = useRef<AbortController | null>(null);
   const loadSequence = useRef(0);
   const mounted = useRef(true);
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  useEffect(() => {
+    if (!active && recorder.current?.state === 'recording') recorder.current.stop();
+  }, [active]);
 
   const remember = useCallback(
     (value: ChatState) => {
@@ -258,8 +289,8 @@ export function Chat({
     [key],
   );
   useEffect(() => {
-    transcriptEnd.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [messages, busy]);
+    if (active && messages.length) transcriptEnd.current?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'nearest' });
+  }, [messages, busy, active]);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -295,9 +326,16 @@ export function Chat({
     [api, remember],
   );
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.hash.split('?')[1] || '').get('conversation');
-    const id = requested || stored.current.conversation;
+    const requestedConversation = () => new URLSearchParams(window.location.hash.split('?')[1] || '').get('conversation');
+    const requested = requestedConversation();
+    const id = stored.current.pending ? stored.current.conversation : requested;
     if (id && /^[0-9a-f-]{36}$/i.test(id)) void openConversation(id);
+    const followLink = () => {
+      const next = requestedConversation();
+      if (next && /^[0-9a-f-]{36}$/i.test(next) && !stored.current.pending) void openConversation(next);
+    };
+    window.addEventListener('hashchange', followLink);
+    return () => window.removeEventListener('hashchange', followLink);
   }, [openConversation]);
 
   async function finished(result: Turn) {
@@ -322,7 +360,8 @@ export function Chat({
       );
       if (Date.now() >= deadline)
         throw new Error('This request is still saved. Use Retrieve reply or inspect Command history.');
-      await sleep(1500, signal);
+      await sleep(testingWorkspace ? 2500 : 1500, signal);
+      while (testingWorkspace && document.hidden) await sleep(1000, signal);
       command = await api.request<CommandResult>(`/v1/commands/${command.command_id}/`, { signal });
     }
     if (!signal.aborted) await finished(command.response);
@@ -377,7 +416,7 @@ export function Chat({
     }
   }
   function newConversation() {
-    if (pending || busy) return;
+    if (pending || busy || recording) return;
     ++loadSequence.current;
     setLoading(false);
     setConversation(null);
@@ -387,7 +426,8 @@ export function Chat({
     setAudio(null);
     remember({ conversation: null, pending: null });
     history.replaceState(null, '', '#chat');
-    input.current?.focus();
+    onNavigateChat?.();
+    requestAnimationFrame(() => input.current?.focus());
   }
   async function removeConversation(id: Identifier) {
     if (!window.confirm('Delete this conversation and its messages?')) return;
@@ -485,7 +525,7 @@ export function Chat({
     }
     try {
       const source = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (!mounted.current) {
+      if (!mounted.current || !activeRef.current) {
         source.getTracks().forEach((track) => track.stop());
         return;
       }
@@ -531,15 +571,6 @@ export function Chat({
       stream.current?.getTracks().forEach((track) => track.stop());
     }
   }
-  async function copy(content: string, index: number) {
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(index);
-      setTimeout(() => setCopied(null), 2000);
-    } catch {
-      setError('Clipboard unavailable. Select and copy the text directly.');
-    }
-  }
   async function openVoice() {
     setError(null);
     try {
@@ -548,6 +579,7 @@ export function Chat({
       setError(errorMessage(error));
     }
   }
+  const [imagesOpen, setImagesOpen] = useState(false);
   const [copiedReply, setCopiedReply] = useState<number | null>(null);
   async function copyReply(text: string, index: number) {
     try { await navigator.clipboard.writeText(text); setCopiedReply(index); }
@@ -557,31 +589,18 @@ export function Chat({
   return (
     <div className="chat-layout">
       <section className="chat-main" aria-label="Conversation">
-        <div className="chat-session-bar">
-          <span className="muted">{conversation ? 'Your ongoing conversation' : 'A fresh conversation'}</span>
-          <button className="text-button" disabled={busy || !!pending} onClick={newConversation}>
-            <Icon name="plus" size={14} />
-            New chat
-          </button>
-        </div>
-        <div className="transcript" aria-live="polite">
+        <div className={`transcript ${messages.length ? '' : 'transcript-welcome'}`} aria-live="polite">
           {loading ? (
             <Loading />
           ) : messages.length ? (
             messages.map((message, index) => (
               <article
                 key={message.id || index}
+                aria-label={message.role === 'user' ? 'Your message' : 'Derek response'}
                 className={`message ${message.role === 'user' ? 'from-user' : 'from-assistant'}`}
               >
-                <div className="message-label">
-                  <span className={message.role === 'user' ? 'message-avatar' : 'assistant-avatar'}>
-                    {message.role === 'user' ? 'You' : <Icon name="spark" size={16} />}
-                  </span>
-                  <strong>{message.role === 'user' ? 'You' : 'Derek'}</strong>
-                  {message.created_at && <time>{dateLabel(message.created_at)}</time>}
-                </div>
                 {message.role === 'assistant' ? (
-                  <><Markdown text={message.content} /><div className="reply-actions"><button className="text-button" onClick={() => void copyReply(message.content, index)}>{copiedReply === index ? 'Copied' : 'Copy answer'}</button></div></>
+                  <><Markdown text={message.content} /><div className="reply-actions"><button className="icon-button answer-copy" aria-label={copiedReply === index ? 'Answer copied' : 'Copy answer'} title={copiedReply === index ? 'Copied' : 'Copy answer'} onClick={() => void copyReply(message.content, index)}>{copiedReply === index ? <Icon name="check" size={16} /> : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></svg>}</button>{testingWorkspace && message.command_id && message.status === 'completed' && !message.action_proposals?.length && <SendAnswer api={api} commandId={message.command_id} />}</div></>
                 ) : (
                   <p className="message-content">{message.content}</p>
                 )}
@@ -614,30 +633,12 @@ export function Chat({
                 {message.handled_by === 'built_in' && (
                   <small className="quick-reply-note">Quick local reply · no model call</small>
                 )}
-                {message.role === 'assistant' && (
-                  <button className="text-button copy-answer" onClick={() => copy(message.content, index)}>
-                    {copied === index ? 'Copied' : 'Copy reply'}
-                  </button>
-                )}
-                {message.role === 'assistant' && message.command_id && message.status === 'completed'
-                  && !message.action_proposals?.length && (
-                    <TelegramOutput api={api} commandId={message.command_id} />
-                )}
               </article>
             ))
           ) : (
             <div className="welcome">
-              <span className="welcome-symbol">
-                <Icon name="spark" size={38} />
-              </span>
-              <span className="eyebrow">A LITTLE HELP FOR THE EVERYDAY.</span>
-              <h2>What’s on your mind?</h2>
-              <p>
-                From a small reminder to your next big idea,
-                <br />
-                let’s move something forward.
-              </p>
-              <div className="suggestions">
+              {active && <OrbitStage />}
+              {toolsEnabled && <div className="suggestions">
                 {suggestions.map((item) => (
                   <button
                     key={item.title}
@@ -653,7 +654,7 @@ export function Chat({
                     <Icon name="arrow" size={16} />
                   </button>
                 ))}
-              </div>
+              </div>}
             </div>
           )}
           {busy && (
@@ -666,7 +667,15 @@ export function Chat({
           )}
           <div ref={transcriptEnd} />
         </div>
-        <div className="composer-area">
+        {testingWorkspace && <><button type="button" className="button secondary image-chat-toggle" aria-expanded={imagesOpen} onClick={() => setImagesOpen(value => !value)}>{imagesOpen ? 'Close image generation' : 'Generate image'}</button>{(imagesOpen || conversation) && <Images api={api} refresh={refresh} changed={changed} conversationId={conversation ? String(conversation) : undefined} compact showForm={imagesOpen} onCreated={job => {
+          setImagesOpen(false);
+          if (job.conversation_id) {
+            setConversation(job.conversation_id);
+            remember({ ...stored.current, conversation: job.conversation_id });
+            history.replaceState(null, '', `#chat?conversation=${encodeURIComponent(job.conversation_id)}`);
+          }
+        }} />}</>}
+        <div className={`composer-area ${messages.length || pending ? 'composer-in-session' : ''}`}>
           <ErrorNotice message={error} />
           {pending && (
             <div className="notice recovery-bar">
@@ -718,7 +727,7 @@ export function Chat({
                     : 'Ask anything, plan something, or get things done…'
                 }
                 disabled={blocked}
-                rows={2}
+                rows={1}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
                     event.preventDefault();
@@ -729,6 +738,7 @@ export function Chat({
             )}
             <div className="composer-bottom">
               <div className="composer-tools">
+                {audioEnabled && <>
                 {localVoice && (
                   <button type="button" className="text-button" onClick={openVoice} disabled={blocked}>
                     Voice window
@@ -745,11 +755,13 @@ export function Chat({
                 </button>
                 <button
                   type="button"
-                  className="text-button"
+                  className="text-button audio-upload"
+                  aria-label="Upload audio"
+                  title="Upload audio"
                   disabled={blocked}
                   onClick={() => fileInput.current?.click()}
                 >
-                  Upload audio
+                  <Icon name="plus" size={18} /><span className="audio-upload-label">Upload audio</span>
                 </button>
                 <input
                   ref={fileInput}
@@ -761,6 +773,7 @@ export function Chat({
                     event.target.value = '';
                   }}
                 />
+                </>}
               </div>
               <button
                 type="submit"
@@ -779,16 +792,17 @@ export function Chat({
           </p>
         </div>
       </section>
-      <aside className="chat-history">
+      {historyTarget && createPortal(<section className="chat-history" aria-label="Conversation history">
         <div className="section-heading">
           <h2>Conversations</h2>
           <button
             className="icon-button"
-            aria-label="New conversation"
-            disabled={busy || !!pending}
+            aria-label="New chat"
+            disabled={busy || !!pending || recording}
             onClick={newConversation}
           >
             <Icon name="plus" size={18} />
+            <span>New chat</span>
           </button>
         </div>
         <input
@@ -810,19 +824,22 @@ export function Chat({
                 <div key={item.id} className={`history-item ${conversation === item.id ? 'current' : ''}`}>
                   <button
                     className="history-open"
-                    disabled={busy || !!pending}
-                    onClick={() => openConversation(item.id)}
+                    disabled={busy || !!pending || recording}
+                    onClick={() => {
+                      history.replaceState(null, '', `#chat?conversation=${encodeURIComponent(item.id)}`);
+                      onNavigateChat?.();
+                      void openConversation(item.id);
+                    }}
                   >
                     <span>{item.title || 'Untitled conversation'}</span>
-                    <small>{dateLabel(item.created_at)}</small>
                   </button>
                   <button
                     className="icon-button history-delete"
                     aria-label={`Delete ${item.title || 'conversation'}`}
-                    disabled={busy || !!pending}
+                    disabled={busy || !!pending || recording}
                     onClick={() => removeConversation(item.id)}
                   >
-                    <Icon name="close" size={14} />
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" /></svg>
                   </button>
                 </div>
               ))}
@@ -830,11 +847,7 @@ export function Chat({
         ) : (
           <p className="muted quiet">Your conversations will find a home here.</p>
         )}
-        <div className="sidebar-tip">
-          <span className="eyebrow">A LITTLE INSPIRATION</span>
-          <p>“Remind me to take a break every afternoon at 3.”</p>
-        </div>
-      </aside>
+      </section>, historyTarget)}
     </div>
   );
 }

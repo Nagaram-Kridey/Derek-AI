@@ -1,8 +1,11 @@
 from getpass import getpass
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from django.core.management.base import BaseCommand, CommandError
 from django.core.exceptions import ValidationError
+from django.core.management.base import BaseCommand, CommandError
+from django.db.models import Q
+
 
 class Command(BaseCommand):
     help = "Create the single owner interactively; passwords never appear in command arguments."
@@ -10,12 +13,14 @@ class Command(BaseCommand):
         parser.add_argument("username")
     def handle(self, *args, **options):
         User = get_user_model()
-        if User.objects.filter(is_active=True).exists():
+        if User.objects.filter(is_active=True).filter(Q(is_staff=True) | Q(is_superuser=True)).exists():
             raise CommandError("An active owner already exists. Use changepassword to reset its password.")
+        if User.objects.filter(username=options["username"]).exists():
+            raise CommandError("That username is already registered. Choose a different owner username.")
         password = getpass("Owner password: ")
         if password != getpass("Confirm password: "):
             raise CommandError("Passwords differ")
-        user = User(username=options["username"])
+        user = User(username=options["username"], is_staff=True)
         try:
             validate_password(password, user)
             if len(password) < 12:

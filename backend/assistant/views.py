@@ -33,6 +33,13 @@ class LoginThrottle(SimpleRateThrottle):
     def get_cache_key(self, request, view):
         return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
 
+class AudioThrottle(SimpleRateThrottle):
+    scope = "audio"
+    rate = "6/hour"
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {"scope": self.scope, "ident": request.user.pk}
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @authentication_classes([])
@@ -41,19 +48,22 @@ def login(request):
     user = authenticate(username=request.data.get("username", ""), password=request.data.get("password", ""))
     if not user:
         return Response({"detail": "Invalid username or password"}, status=401)
-    if get_user_model().objects.filter(is_active=True).count() != 1:
-        return Response({"detail": "This service supports one active user. Configure the owner account."}, status=503)
+    from .permissions import is_admin
+    from .auth_views import identity
+    if not is_admin(user):
+        return Response({"detail": "Use Google to sign in to your account."}, status=403)
     token, _ = Token.objects.get_or_create(user=user)
-    if settings.LOCAL_EXECUTION:
+    if settings.LOCAL_EXECUTION and not getattr(settings, "TEST_WORKSPACE", False):
         from desktop.credentials import remember_owner_token
         remember_owner_token("http://127.0.0.1:8000", token.key, user.username)
     audit(user, "auth.login")
-    return Response({"token": token.key, "username": user.username})
+    return Response({"token": token.key, **identity(user)})
 
 @api_view(["POST"])
 def logout(request):
     Token.objects.filter(user=request.user).delete()
-    if settings.LOCAL_EXECUTION:
+    from .permissions import is_admin
+    if settings.LOCAL_EXECUTION and not getattr(settings, "TEST_WORKSPACE", False) and is_admin(request.user):
         from desktop.credentials import forget_owner_token
         forget_owner_token("http://127.0.0.1:8000")
     audit(request.user, "auth.logout")
@@ -61,8 +71,42 @@ def logout(request):
 
 @api_view(["POST"])
 def turn(request):
+    if "audio" not in request.FILES:
+        return _turn(request)
+    from .permissions import can_use_browser_voice
+    if not can_use_browser_voice(request.user):
+        return Response({"detail": "Audio input is unavailable for this account."}, status=403)
+    if m.Command.objects.filter(user=request.user, status__in=["queued", "running"]).exists():
+        return Response({"detail": "Wait for your unfinished request before sending audio."}, status=409)
+    from zoneinfo import ZoneInfo
+    day = timezone.localdate(timezone=ZoneInfo("Asia/Kolkata"))
+    usage = m.UsageDay.objects.filter(user=request.user, date=day).first()
+    limit = getattr(settings, "TEST_DAILY_CALL_LIMIT", 20) if getattr(settings, "TEST_WORKSPACE", False) else settings.DAILY_MODEL_CALL_LIMIT
+    if usage and usage.model_calls >= limit:
+        return Response({"detail": "Daily assistant usage limit reached."}, status=429)
+    throttle = AudioThrottle()
+    if not throttle.allow_request(request, None):
+        return Response({"detail": "Audio input limit reached. Try again later."}, status=429)
+    # A single nonblocking OS lease bounds CPU-heavy transcription across users
+    # and web processes. Contention is rejected, never queued on web threads.
+    from companion.journal import WorkerLock
+    lease = WorkerLock(Path(settings.MEDIA_ROOT).parent / "runtime" / "audio-input")
+    try:
+        lease.__enter__()
+    except RuntimeError:
+        return Response({"detail": "Audio transcription is busy. Please try again shortly."}, status=409)
+    try:
+        return _turn(request)
+    finally:
+        lease.__exit__(None, None, None)
+
+
+def _turn(request):
     text = request.data.get("text", "")
     if "audio" in request.FILES:
+        from .permissions import can_use_browser_voice
+        if not can_use_browser_voice(request.user):
+            return Response({"detail": "Audio input is available to the administrator only."}, status=403)
         audio = request.FILES["audio"]
         if audio.size > 20 * 1024 * 1024:
             raise ValueError("Audio uploads are limited to 20 MB")
@@ -261,8 +305,14 @@ def reports(request, pk=None, detail=False, action=None):
         request_id = raw.pop("request_id", None)
         clean = ResearchArgs.model_validate(raw).model_dump()
         from .form_requests import create_once
+        def create_report():
+            with transaction.atomic():
+                get_user_model().objects.select_for_update().get(pk=request.user.pk)
+                if getattr(settings, "TEST_WORKSPACE", False) and m.Report.objects.filter(user=request.user, status__in=["queued", "running"]).exists():
+                    raise ValueError("Wait for your unfinished report before requesting another.")
+                return m.Report.objects.create(user=request.user, title=clean["topic"][:240], content=clean)
         row, created = create_once(request.user, "report", {**clean, **({"request_id": request_id} if request_id is not None else {})}, m.Report,
-                                   lambda: m.Report.objects.create(user=request.user, title=clean["topic"][:240], content=clean))
+                                   create_report)
         from .tasks import research_report
         kick(research_report, str(row.id))
         if created:
@@ -276,6 +326,17 @@ def status(request):
     from .local_status import runtime_status
     usage = m.UsageDay.objects.filter(user=request.user, date=timezone.localdate()).values("model_calls", "input_chars", "input_tokens", "output_tokens").first() or {}
     assistant_state = services.state(request.user)
+    from .permissions import is_admin
+    if not is_admin(request.user) or getattr(settings, "TEST_WORKSPACE", False):
+        return Response({
+            "testing_workspace": getattr(settings, "TEST_WORKSPACE", False), "runtime": {"managed": False}, "paused": False,
+            "timezone": settings.TIME_ZONE, "scheduler_online": False,
+            "desktop_online": False, "integrations": {},
+            "active_commands": m.Command.objects.filter(user=request.user, status__in=["queued", "running"]).count(),
+            "unread_notifications": m.Notification.objects.filter(user=request.user, read_at__isnull=True).count(),
+            "interactive_model": profile_details(request.user, preferences(request.user).interactive_profile),
+            "usage": {**usage, "daily_call_limit": settings.DAILY_MODEL_CALL_LIMIT, "daily_input_char_limit": settings.DAILY_INPUT_CHAR_LIMIT},
+        })
     return Response({
         "runtime": runtime_status(),
         "paused": assistant_state.paused,
@@ -538,7 +599,7 @@ def health(request):
     return Response({"status": "ok"})
 
 def dashboard(request):
-    path = settings.BASE_DIR / "staticapp" / "index.html"
+    path = Path(settings.WHITENOISE_ROOT) / "index.html"
     if path.exists():
         return HttpResponse(path.read_text(encoding="utf-8"))
     return HttpResponse("Derek backend is running. Start the dashboard with npm run dev in web_dashboard.")

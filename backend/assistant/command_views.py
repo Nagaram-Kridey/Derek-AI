@@ -73,6 +73,8 @@ def preferences(request):
             raise ValueError("Choose interactive_profile and/or response_detail.")
         if "interactive_profile" in request.data and (not isinstance(request.data["interactive_profile"], str) or request.data["interactive_profile"] not in {"gemini", "configured"}):
             raise ValueError("Choose gemini or configured.")
+        if getattr(settings, "TEST_WORKSPACE", False) and request.data.get("interactive_profile", "configured") != "configured":
+            raise ValueError("Testing workspace uses the configured model only.")
         from .chat_policy import DETAILS
         if "response_detail" in request.data and (not isinstance(request.data["response_detail"], str) or request.data["response_detail"] not in DETAILS):
             raise ValueError("Choose auto, brief, balanced or detailed.")
@@ -90,7 +92,7 @@ def preferences(request):
             "response_detail": row.response_detail,
             "profiles": [
                 profile_details(request.user, value)
-                for value in ("gemini", "configured")
+                for value in (("configured",) if getattr(settings, "TEST_WORKSPACE", False) else ("gemini", "configured"))
             ],
             "note": "Changes apply to new conversations. Existing conversations retain their model; no automatic provider fallback.",
         }

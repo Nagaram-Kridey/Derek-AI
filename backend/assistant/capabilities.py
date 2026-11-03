@@ -155,9 +155,17 @@ def profile_details(user, profile):
 
 def catalog(user, profile=None):
     from .services import tool_contracts, state
+    from .permissions import can_use_tools
 
     profile = profile or preferences(user).interactive_profile
     model = profile_details(user, profile)
+    if not can_use_tools(user):
+        return {"profile": model, "scheduler_online": False, "capabilities": [
+            {"id": "private_chat", "title": "Your conversations", "description": "Text conversations and history are private to your account. Tools and administrator integrations are unavailable to tester accounts.",
+             "status": model["status"], "reason": model["reason"], "location": "service", "approval": "none", "implemented": True, "channels": ["web"]},
+            {"id": "personal_memory", "title": "Your personal memory", "description": "Save, review and forget your own preferences in chat. Memories are private to your account.",
+             "status": "ready" if preferences(user).memory_enabled else "paused", "reason": "Uses only this account's accepted memories.", "location": "service", "approval": "account_controls", "implemented": True, "channels": ["web"]},
+        ]}
     assistant_state = state(user)
     scheduler = bool(
         assistant_state.scheduler_heartbeat_at
@@ -380,6 +388,9 @@ def catalog(user, profile=None):
 
 def model_tools(user, profile):
     from .services import tool_contracts
+    from .permissions import can_use_tools
+    if not can_use_tools(user):
+        return []
 
     rows = {row["id"]: row for row in catalog(user, profile)["capabilities"]}
     return [

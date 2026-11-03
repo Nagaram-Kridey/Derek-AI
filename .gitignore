@@ -29,3 +29,12 @@ playwright/.auth/
 *.tsbuildinfo
 # Standalone public roadmap build output
 web_dashboard/dist-roadmap/
+
+# Isolated tester secrets, data and runtime
+.trial-workspace/
+
+# Generated browser captures/logs can contain private conversations and identity data.
+.playwright-cli/
+output/
+# Derived local knowledge graphs may contain extracted private source material.
+graphify-out/

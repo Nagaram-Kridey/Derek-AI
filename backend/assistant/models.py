@@ -318,3 +318,11 @@ class WhatsAppObservation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         constraints = [models.UniqueConstraint(fields=['watch', 'receipt'], name='unique_whatsapp_observation')]
+
+
+from .telemetry_models import ModelObservation  # noqa: E402,F401
+from .auth_models import GoogleIdentity, GoogleLoginChallenge  # noqa: E402,F401
+
+from .telegram_link_models import TelegramLink, TelegramLinkGrant, TrialTelegramReceipt, TrialTelegramCursor  # noqa: E402,F401
+
+from .image_models import ImageJob  # noqa: E402,F401

@@ -4,6 +4,8 @@ import logging
 import time
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Sum
+from zoneinfo import ZoneInfo
 from django.utils import timezone
 from cryptography.fernet import Fernet
 from .models import AuditEvent, ProviderCredential, UsageDay
@@ -37,9 +39,22 @@ def decrypt_credentials(user, provider):
 
 def reserve_usage(user, input_chars):
     with transaction.atomic():
-        row, _ = UsageDay.objects.get_or_create(user=user, date=timezone.localdate())
+        trial = getattr(settings, "TEST_WORKSPACE", False)
+        if trial:
+            from .permissions import trial_admitted
+            if not trial_admitted(user):
+                raise ConfigError("This account is no longer invited to the testing workspace.")
+        day = timezone.localdate(timezone=ZoneInfo("Asia/Kolkata")) if trial else timezone.localdate()
+        row, _ = UsageDay.objects.get_or_create(user=user, date=day)
+        if trial:
+            # Trial uses SQLite IMMEDIATE transactions: reservation is serialized
+            # across all users before reading the shared count.
+            total = UsageDay.objects.filter(date=day).aggregate(n=Sum("model_calls"))["n"] or 0
+            if total >= getattr(settings, "TEST_SHARED_DAILY_CALL_LIMIT", 200):
+                raise ConfigError("Testing workspace shared daily model-call limit reached.")
         row = UsageDay.objects.select_for_update().get(pk=row.pk)
-        if row.model_calls >= settings.DAILY_MODEL_CALL_LIMIT or row.input_chars + input_chars > settings.DAILY_INPUT_CHAR_LIMIT:
+        limit = getattr(settings, "TEST_DAILY_CALL_LIMIT", 20) if trial else settings.DAILY_MODEL_CALL_LIMIT
+        if row.model_calls >= limit or row.input_chars + input_chars > settings.DAILY_INPUT_CHAR_LIMIT:
             raise ConfigError("Daily assistant usage limit reached. Review your limits in Settings.")
         row.model_calls += 1
         row.input_chars += input_chars
@@ -65,10 +80,13 @@ class BudgetGateway:
                 raise RequestCancelled("Research cancelled.")
             pk = reserve_usage(self.user, len(json.dumps([args, kwargs], default=str)))
             started = time.monotonic()
+            observation_error = None
+            elapsed_ms = None
             try:
                 result = method(*args, **kwargs)
+                elapsed_ms = (time.monotonic() - started) * 1000
                 if name == "chat" and isinstance(result, dict):
-                    result["provider_latency_ms"] = round((time.monotonic() - started) * 1000)
+                    result["provider_latency_ms"] = round(elapsed_ms)
                 if self.cancelled and self.cancelled():
                     raise RequestCancelled("Research cancelled.")
                 if name != "grounded_search":
@@ -76,11 +94,22 @@ class BudgetGateway:
                     if self.provider == "freellmapi" and self.gateway.last_routing:
                         audit(self.user, "model.routed", operation=name, **self.gateway.last_routing)
                 return result
-            except (ConfigError, ProviderError) as exc:
-                if name != "grounded_search":
+            except Exception as exc:
+                if elapsed_ms is None:
+                    elapsed_ms = (time.monotonic() - started) * 1000
+                observation_error = exc
+                if name != "grounded_search" and isinstance(exc, (ConfigError, ProviderError)):
                     self._health(False, str(exc))
                 raise
             finally:
+                from .telemetry import record_observation
+                model = getattr(self.gateway, "last_requested_model", None) or {
+                    "gemini": settings.GEMINI_MODEL, "ollama": settings.OLLAMA_MODEL,
+                    "freellmapi": settings.FREELLMAPI_MODEL,
+                }.get(self.provider, "unknown")
+                record_observation(self.user, self.provider, model, name,
+                                   elapsed_ms if elapsed_ms is not None else (time.monotonic() - started) * 1000,
+                                   observation_error)
                 usage = self.gateway.last_usage
                 UsageDay.objects.filter(pk=pk).update(input_tokens=F("input_tokens") + usage.get("input_tokens", 0), output_tokens=F("output_tokens") + usage.get("output_tokens", 0))
                 self.gateway.last_usage = {"input_tokens": 0, "output_tokens": 0}

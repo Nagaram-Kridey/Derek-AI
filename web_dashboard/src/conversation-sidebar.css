@@ -1,0 +1,99 @@
+.derek-workspace .sidebar{width:272px;z-index:65;overflow-y:auto}
+.derek-workspace .main-panel{margin-left:272px;width:calc(100% - 272px)}
+.derek-workspace .sidebar nav{margin-top:24px;flex-shrink:0}
+.derek-workspace .sidebar-conversations{min-height:0;flex:1 0 auto;margin-top:24px}
+.derek-workspace .sidebar .chat-history{width:100%;padding:0;border:0;background:transparent;box-shadow:none;position:static}
+.derek-workspace .sidebar .chat-history .section-heading{display:flex;flex-direction:column;align-items:stretch;gap:10px;margin-bottom:12px}
+.derek-workspace .sidebar .chat-history h2{font-size:12px;color:var(--muted);font-weight:500;margin:0}
+.derek-workspace .sidebar .chat-history .section-heading button{display:flex;justify-content:flex-start;gap:10px;min-height:44px;width:100%;border:1px solid var(--line);padding:10px 12px;color:var(--text);border-radius:8px}
+.derek-workspace .sidebar .history-search{width:100%;font-size:12px;min-height:42px;padding:10px;margin-bottom:10px}
+.derek-workspace .sidebar .history-list{display:grid;grid-template-columns:minmax(0,1fr);gap:3px;max-height:none;overflow:visible}
+.derek-workspace .sidebar{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--muted) 35%,transparent) transparent}
+@supports selector(::-webkit-scrollbar){
+ .derek-workspace .sidebar{scrollbar-width:auto;scrollbar-color:auto}
+ .derek-workspace .sidebar::-webkit-scrollbar{width:8px}
+ .derek-workspace .sidebar::-webkit-scrollbar-track{background:transparent}
+ .derek-workspace .sidebar::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--muted) 30%,transparent);border:2px solid transparent;background-clip:padding-box;border-radius:999px}
+ .derek-workspace .sidebar::-webkit-scrollbar-thumb:hover{background-color:color-mix(in srgb,var(--accent) 60%,transparent)}
+}
+.derek-workspace .sidebar .history-item{display:flex;align-items:center;gap:4px;min-width:0;border:0;border-radius:7px;padding:3px}
+.derek-workspace .sidebar .history-item:hover,.derek-workspace .sidebar .history-item.current{background:var(--raised)}
+.derek-workspace .sidebar .history-open{display:flex;align-items:center;text-align:left;min-width:0;flex:1;padding:9px 5px;min-height:48px;color:var(--text)}
+.derek-workspace .sidebar .history-open>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.derek-workspace .sidebar .history-open small{font-size:10px;color:var(--muted)}
+.derek-workspace .sidebar .history-delete{flex-shrink:0;min-height:44px;min-width:32px;padding:6px;color:var(--muted)}
+.derek-workspace .chat-layout{grid-template-columns:minmax(0,1fr)}
+.derek-workspace .mobile-history-trigger,.derek-workspace .mobile-sidebar-close{display:none}
+.derek-workspace.sidebar-collapsed .sidebar-conversations{display:none}
+.derek-workspace.sidebar-collapsed .sidebar{width:76px}
+.derek-workspace.sidebar-collapsed .main-panel{margin-left:76px;width:calc(100% - 76px)}
+.derek-workspace [hidden]{display:none!important}
+.derek-workspace .sidebar-scrim{display:none}
+.derek-workspace .topbar-chat{height:0;min-height:0;padding:0;border:0;background:transparent}
+.derek-workspace .page-content{width:100%}
+.derek-workspace .today-toggle{margin-left:0;align-self:flex-start}
+@media(min-width:701px){.derek-workspace .main-panel:not([data-page="chat"])>.page-content{padding-top:80px}}
+@media(max-width:700px){
+ .derek-workspace .topbar-chat{height:64px;padding:16px 112px 0 16px}
+ .derek-workspace .sidebar{display:none}
+ .derek-workspace .main-panel,.derek-workspace.sidebar-collapsed .main-panel{margin-left:0;width:100%}
+ .derek-workspace .mobile-history-trigger{display:inline-flex;align-items:center;gap:6px;min-height:40px;margin-bottom:12px;font-size:12px}
+ .derek-workspace .topbar{display:block}
+ .derek-workspace.mobile-sidebar-open .sidebar{display:flex;position:fixed;inset:0 auto 0 0;width:min(310px,88vw);height:100dvh;background:var(--surface);z-index:85;padding:18px;overflow-y:auto;border-right:1px solid var(--line)}
+ .derek-workspace.mobile-sidebar-open .sidebar nav{display:block;margin-top:16px}
+ .derek-workspace .suggestions{display:none}
+ .derek-workspace.mobile-sidebar-open .sidebar-scrim{display:block;position:fixed;inset:0;background:#0008;z-index:80}
+ .derek-workspace .mobile-sidebar-close{display:flex;align-self:flex-end;min-height:44px;min-width:44px;align-items:center;justify-content:center;margin-bottom:4px}
+ .derek-workspace.mobile-sidebar-open .sidebar-toggle{display:none}
+ .derek-workspace .sidebar-conversations{margin-top:18px}
+}
+
+/* Conversation reading surface shares the static Orbit backdrop. */
+.derek-workspace .chat-main .transcript{background:transparent;border:0;box-shadow:none}
+.derek-workspace .chat-main .message{background:transparent;border:0;box-shadow:none;border-radius:0;padding:18px 0;max-width:100%;min-width:0}
+.derek-workspace .chat-main .from-user{display:flex;flex-direction:column;align-items:flex-end}
+.derek-workspace .chat-main .from-user .message-content{background:var(--raised);border:1px solid var(--line);border-radius:20px 20px 5px 20px;padding:12px 18px;margin:0;max-width:min(80%,680px);width:fit-content;white-space:pre-wrap;overflow-wrap:anywhere;text-align:left}
+.derek-workspace .chat-main .from-assistant{text-align:left;margin-right:auto;width:100%}
+.derek-workspace .chat-main .from-assistant .prose{background:transparent;border:0;max-width:76ch}
+@media(max-width:700px){.derek-workspace .chat-main .from-user .message-content{max-width:90%;padding:11px 15px}.derek-workspace .chat-main .message{padding:14px 0}}
+
+/* Compact sidebar typography inspired by the supplied reference. */
+.derek-workspace .sidebar,.derek-workspace .sidebar button,.derek-workspace .sidebar input{font-family:'Inter','Segoe UI',sans-serif;letter-spacing:-.02em}
+.derek-workspace .sidebar .nav-item,.derek-workspace .sidebar .history-open>span{font-size:13px;font-weight:500;line-height:1.5}
+.derek-workspace .sidebar .chat-history h2{font-size:11px;font-weight:600;letter-spacing:-.015em}
+.derek-workspace .sidebar .chat-history .section-heading button{font-size:13px;font-weight:500}
+
+.derek-workspace .answer-copy{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid transparent;border-radius:10px;color:var(--muted);background:transparent}
+.derek-workspace .answer-copy:hover,.derek-workspace .answer-copy:focus-visible{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);border-color:color-mix(in srgb,var(--accent) 25%,transparent)}
+@media(prefers-reduced-motion:no-preference){.derek-workspace .answer-copy{transition:transform 160ms ease,background-color 160ms ease,color 160ms ease,border-color 160ms ease}.derek-workspace .answer-copy:hover{transform:translateY(-2px)}.derek-workspace .answer-copy:active{transform:translateY(0) scale(.94)}}
+
+.derek-workspace .composer textarea,.derek-workspace .composer textarea:focus-visible{outline:none;box-shadow:none;border:0;min-height:24px;resize:none;padding:0;width:100%;max-height:180px}
+.derek-workspace .composer:focus-within{border-color:var(--line)}
+.derek-workspace .composer-in-session{width:min(100%,800px);margin-inline:auto}
+.derek-workspace .composer-in-session .composer{display:flex;align-items:flex-end;gap:12px;padding:14px 16px}
+.derek-workspace .composer-in-session .composer textarea{flex:1;min-width:0}
+.derek-workspace .composer-in-session .composer-bottom{flex-shrink:0;padding:0;margin:0;gap:8px;align-items:center}
+.derek-workspace .composer-in-session .composer-tools:empty{display:none}
+@media(max-width:700px){.derek-workspace .composer-in-session .composer{gap:8px}.derek-workspace .composer-in-session .composer-tools{display:none}}
+
+/* Keep the active-chat composer anchored within the workspace viewport. */
+.derek-workspace .chat-main:has(.composer-in-session){padding-bottom:140px}
+.derek-workspace .composer-in-session{position:fixed;bottom:18px;left:calc(272px + (100vw - 272px)/2);transform:translateX(-50%);width:min(800px,calc(100vw - 320px));z-index:50;margin:0}
+.derek-workspace.sidebar-collapsed .composer-in-session{left:calc(76px + (100vw - 76px)/2);width:min(800px,calc(100vw - 124px))}
+.derek-workspace .composer textarea:placeholder-shown{text-align:center}
+.derek-workspace .composer textarea:not(:placeholder-shown){text-align:left}
+@media(max-width:700px){.derek-workspace .composer-in-session,.derek-workspace.sidebar-collapsed .composer-in-session{left:50%;width:calc(100vw - 32px);bottom:calc(80px + env(safe-area-inset-bottom))}.derek-workspace .chat-main:has(.composer-in-session){padding-bottom:190px}}
+
+/* One natural page scroll, with a shared centered reading/composer column. */
+.derek-workspace .chat-main:has(.composer-in-session) .transcript{width:min(800px,calc(100vw - 320px));max-height:none;min-height:0;overflow:visible;padding-right:0;margin-inline:auto}
+.derek-workspace.sidebar-collapsed .chat-main:has(.composer-in-session) .transcript{width:min(800px,calc(100vw - 124px))}
+.derek-workspace .chat-main .from-assistant .prose{max-width:100%}
+.derek-workspace .composer-in-session{bottom:42px}
+.derek-workspace .composer textarea:placeholder-shown{text-align:left}
+.derek-workspace .composer-in-session .composer{align-items:center}
+.derek-workspace .chat-main:has(.composer-in-session){padding-bottom:200px}
+@media(max-width:700px){.derek-workspace .chat-main:has(.composer-in-session) .transcript,.derek-workspace.sidebar-collapsed .chat-main:has(.composer-in-session) .transcript{width:100%}.derek-workspace .composer-in-session,.derek-workspace.sidebar-collapsed .composer-in-session{bottom:calc(94px + env(safe-area-inset-bottom))}}
+
+.derek-workspace .trial-settings{max-width:900px;margin-inline:auto}.derek-workspace .trial-settings select{display:block;width:100%;margin-top:8px}.derek-workspace .trial-settings .actions{display:flex;flex-wrap:wrap;gap:10px}
+.derek-workspace .composer-in-session .composer-tools{display:flex;gap:4px}
+@media(max-width:700px){.derek-workspace .composer-in-session .composer-tools .audio-upload-label{display:none}.derek-workspace .composer-in-session .composer-tools .audio-upload{display:inline-flex;min-width:36px;min-height:40px;align-items:center;justify-content:center}.derek-workspace .bottom-navigation{grid-template-columns:repeat(auto-fit,minmax(0,1fr))}}

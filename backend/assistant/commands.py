@@ -7,6 +7,7 @@ import re
 import uuid
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
@@ -176,6 +177,14 @@ def submit(
         raise ValueError(
             "Choose gemini or configured; private chat is a separate desktop mode."
         )
+    if getattr(settings, "TEST_WORKSPACE", False):
+        if input_mode not in {"text", "voice"} or channel not in {"web", "telegram"} or profile not in {None, "configured"}:
+            raise ValueError("Testing workspace supports browser text/voice chat with the configured model only.")
+        if channel == "telegram":
+            from .telegram_link_models import TelegramLink
+            if not TelegramLink.objects.filter(user=user, chat_id=str(external_key), telegram_user_id=str(external_key)).exists():
+                raise ValueError("Connect your own private Telegram chat first.")
+        profile = "configured"
     fingerprint = payload_digest(
         {
             "text": text.strip(),
@@ -195,6 +204,8 @@ def submit(
                     "This request ID belongs to a different command. Retry the original request or use a new ID."
                 )
             return previous, False
+        if getattr(settings, "TEST_WORKSPACE", False) and m.Command.objects.filter(user=user, status__in=["queued", "running"]).exists():
+            raise ValueError("Wait for your unfinished request before starting another.")
         session = None
         if channel == "telegram":
             if not external_key:
@@ -233,6 +244,8 @@ def submit(
                 title=text[:100],
                 model_profile=profile or preferences(user).interactive_profile,
             )
+        if getattr(settings, "TEST_WORKSPACE", False) and conversation.model_profile != "configured":
+            raise ValueError("Testing workspace requires the configured model route.")
         if session:
             session.conversation = conversation
             session.save(update_fields=["conversation"])
@@ -523,7 +536,7 @@ def run(command_id):
             reply_text=command.response["reply_text"],
             response=command.response,
         )
-        if command.channel == "telegram":
+        if command.channel == "telegram" and not getattr(settings, "TEST_WORKSPACE", False):
             session = m.ChannelSession.objects.filter(
                 user=command.user,
                 channel="telegram",
@@ -798,6 +811,9 @@ def prepare(action):
 
 def decide(proposal, approve, revision, binding, persist_message=True):
     from . import services
+    from .permissions import can_use_tools
+    if not can_use_tools(proposal.user):
+        raise ValueError("Actions are available to the workspace administrator only.")
 
     expired = False
     with transaction.atomic():
@@ -1013,6 +1029,9 @@ def record_decision(action, proposal, result, approve, persist_message=True):
 def execute_tool(command, step, name, args, gateway, response):
     from . import services
     from .capabilities import MUTATIONS, model_tools
+    from .permissions import can_use_tools
+    if not can_use_tools(command.user):
+        raise ValueError("Actions are unavailable in tester chat.")
 
     if not isinstance(name, str) or name not in {
         item["name"] for item in model_tools(command.user, command.model_profile)

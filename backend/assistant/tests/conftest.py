@@ -9,7 +9,7 @@ def configuration(settings):
 
 @pytest.fixture
 def user(db):
-    return get_user_model().objects.create_user(username="owner", password="testing-a-long-password")
+    return get_user_model().objects.create_user(username="owner", password="testing-a-long-password", is_staff=True)
 
 @pytest.fixture
 def client(user):

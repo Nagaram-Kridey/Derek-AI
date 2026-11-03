@@ -1,0 +1,11 @@
+.login-layout .google-signin{margin:28px 0 18px;min-height:44px}
+.login-layout .google-signin-button{width:100%;max-width:360px;min-height:44px}
+.login-layout .google-signin [role=status]{font-size:13px;line-height:1.6;color:var(--muted)}
+.login-layout .google-signin-button[hidden]{display:none}
+.login-layout .admin-signin{margin-top:28px;border-top:1px solid var(--line);padding-top:18px}
+.login-layout .admin-signin summary{cursor:pointer;min-height:36px;line-height:36px;font-size:13px;color:var(--muted)}
+.login-layout .admin-signin form{margin-top:16px}
+.login-layout .admin-signin form>.button{margin-top:22px}
+.login-layout :is(input,button,summary):focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.login-layout .remember-option{font-size:12px;line-height:1.5;color:var(--muted)}
+@media(max-width:700px){.login-layout .login-box{min-width:0;max-width:100%}.login-layout .google-signin-button{max-width:100%}}

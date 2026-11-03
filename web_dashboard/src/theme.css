@@ -1,7 +1,7 @@
 html[data-theme] { --ground:#141616; --surface:#1c1f1f; --raised:#242828; --text:#eef3f1; --muted:#a8b6b1; --border:#39423e; --accent:#63c6b2; --ink:var(--text); --paper:var(--surface); --line:var(--border); --mint:var(--raised); background:var(--ground); color:var(--text); color-scheme:dark; }
 html[data-theme="light"] { --ground:#f5f7f7; --surface:#fff; --raised:#eaf0ee; --text:#182322; --muted:#536761; --border:#cbd6d2; --accent:#237968; color-scheme:light; }
 html[data-theme] body,.derek-workspace { background:var(--ground); color:var(--text); }
-.derek-workspace { font-family:'Segoe UI',Arial,sans-serif; }
+.derek-workspace { font-family:'Inter','Segoe UI',Arial,sans-serif; }
 .derek-workspace .sidebar { background:var(--ground); color:var(--text); width:224px; padding:24px 16px; border-color:var(--line); }
 .derek-workspace .sidebar-brand { display:flex; align-items:center; justify-content:space-between; }
 .derek-workspace .sidebar .brand { margin:0; }

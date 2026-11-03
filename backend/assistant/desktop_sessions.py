@@ -65,4 +65,5 @@ def exchange(request):
     if not token or not secrets.compare_digest(hashed(token.key),row.token_digest):
         return Response({'detail':'Sign in again to reconnect this desktop.'},status=401)
     audit(token.user,'auth.desktop_launch_exchanged')
-    return Response({'token':token.key,'username':token.user.username},headers={'Cache-Control':'no-store'})
+    from .auth_views import identity
+    return Response({'token':token.key, **identity(token.user)},headers={'Cache-Control':'no-store'})

@@ -22,9 +22,12 @@ def test_owner_board_and_stale_save(client, user):
     assert client.put('/v1/roadmap/', change, format='json').status_code == 200
     assert client.put('/v1/roadmap/', first, format='json').status_code == 409
     assert client.get('/v1/roadmap/').json()['items'][0]['notes'] == 'Owner acceptance pending'
-    other = get_user_model().objects.create_user(username='other')
+    other = get_user_model().objects.create_user(username='other', is_staff=True)
     client.force_authenticate(other)
     assert client.get('/v1/roadmap/').json()['items'][0]['notes'] == first['items'][0]['notes']
+    tester = get_user_model().objects.create_user(username='tester')
+    client.force_authenticate(tester)
+    assert client.get('/v1/roadmap/').status_code == 403
     assert APIClient().get('/v1/roadmap/').status_code in (401, 403)
 
 

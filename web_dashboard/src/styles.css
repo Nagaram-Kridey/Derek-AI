@@ -1,5 +1,5 @@
 :root {
-  font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
   color: #203635;
   background: #f6f7f3;
   font-synthesis: none;
@@ -48,7 +48,7 @@ p {
 h1,
 h2,
 h3 {
-  font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
   letter-spacing: -0.04em;
 }
 h1 {
@@ -158,7 +158,7 @@ button {
   display: flex;
   align-items: center;
   gap: 11px;
-  font-family: 'Segoe UI', sans-serif;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
   font-weight: 800;
   font-size: 22px;
   letter-spacing: -0.04em;
@@ -2030,7 +2030,7 @@ summary:focus-visible {
 .button, input, select, textarea { border-radius: 6px; }
 .button { min-height: 40px; }
 .day-hero { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 0 0 26px; align-items: flex-start; }
-.day-hero h2 { font-family: Georgia, 'Times New Roman', serif; font-weight: 400; font-size: clamp(24px, 2.3vw, 31px); letter-spacing: -.035em; margin: 10px 0; }
+.day-hero h2 { font-family: 'Inter', 'Segoe UI', sans-serif; font-weight: 400; font-size: clamp(24px, 2.3vw, 31px); letter-spacing: -.035em; margin: 10px 0; }
 .day-hero p { max-width: 450px; color: var(--muted); }
 .day-hero .button { margin-top: 18px; }
 .day-shortcuts { min-width: 270px; padding-top: 12px; }

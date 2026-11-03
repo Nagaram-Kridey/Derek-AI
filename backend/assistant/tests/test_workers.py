@@ -75,3 +75,48 @@ def test_cancellation_probe_keeps_callers_transaction_open(user):
     with patch.object(connection, "close") as close:
         assert not commands.cancellation_probe(command.pk)()
         close.assert_not_called()
+
+
+@pytest.mark.parametrize("lane", ["research", "delivery"])
+def test_demoted_owner_work_does_not_block_following_admin_job(user, settings, monkeypatch, tmp_path, lane):
+    from django.contrib.auth import get_user_model
+    from django.utils import timezone
+    from assistant import local_worker, tasks
+
+    former_owner = get_user_model().objects.create_user(username="former-owner", is_staff=False)
+    for account in (former_owner, user):
+        m.AssistantState.objects.get_or_create(user=account)
+    monkeypatch.setenv("DEREK_LOCAL_EXECUTION", "false")
+    monkeypatch.setattr("desktop.state.RUNTIME", tmp_path)
+    monkeypatch.setattr("sys.argv", ["local-worker", lane])
+    settings.LOCAL_EXECUTION = True
+    if lane == "research":
+        blocked = m.Report.objects.create(user=former_owner, title="Old request")
+        following = m.Report.objects.create(user=user, title="Admin request")
+        original = tasks.research_report.run
+        def execute(identifier):
+            if identifier == str(blocked.pk):
+                return original(identifier)
+            m.Report.objects.filter(pk=identifier).update(status="completed")
+        worker = SimpleNamespace(name="research", run=Mock(side_effect=execute))
+        target = "research_report"
+    else:
+        rows = []
+        for account in (former_owner, user):
+            task = m.ScheduledTask.objects.create(user=account, name="Saved reminder", kind="reminder", payload={"message": "Reminder"}, schedule={})
+            rows.append(m.ScheduledOccurrence.objects.create(task=task, scheduled_for=timezone.now()))
+        blocked, following = rows
+        worker = SimpleNamespace(name="occurrence", run=Mock(side_effect=tasks.execute_occurrence.run))
+        target = "execute_occurrence"
+    with (
+        patch("desktop.state.read_record", side_effect=[{}, {}, {"stopping": True}]),
+        patch("desktop.state.write_record"), patch("companion.journal.WorkerLock"),
+        patch("django.db.close_old_connections"), patch("signal.signal"),
+        patch.object(local_worker.threading, "Thread"), patch.object(tasks, target, worker),
+        patch("assistant.tasks.kick"),
+    ):
+        local_worker.main()
+    assert [call.args[0] for call in worker.run.call_args_list] == [str(blocked.pk), str(following.pk)]
+    blocked.refresh_from_db()
+    following.refresh_from_db()
+    assert blocked.status == "cancelled" and following.status == "completed"

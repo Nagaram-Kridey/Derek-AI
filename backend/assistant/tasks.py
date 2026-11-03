@@ -22,6 +22,7 @@ def notify(user, text):
 
 @shared_task(name="assistant.deliver_notification")
 def deliver_notification(notification_id):
+    from .permissions import can_use_tools
     with transaction.atomic():
         row = m.Notification.objects.select_for_update().get(pk=notification_id)
         if row.status != "pending":
@@ -30,7 +31,7 @@ def deliver_notification(notification_id):
         row.started_at = timezone.now()
         row.save()
     try:
-        if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID:
+        if can_use_tools(row.user) and settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID:
             from .integrations.telegram import send_message
             send_message(settings.TELEGRAM_BOT_TOKEN, settings.TELEGRAM_CHAT_ID, row.text)
             row.status, row.sent_at = "sent", timezone.now()
@@ -104,6 +105,7 @@ def deliver_report_file(row):
 
 @shared_task(name="assistant.send_report_file")
 def send_report_file(report_id):
+    from .permissions import can_use_tools
     from datetime import datetime
     from .integrations.telegram import send_document, TelegramRateLimit
     with transaction.atomic():
@@ -111,6 +113,11 @@ def send_report_file(report_id):
         if not row:
             return
         delivery = row.progress.get("telegram_delivery", {})
+        if not can_use_tools(row.user):
+            if delivery.get("status") == "pending":
+                row.progress = {**row.progress, "telegram_delivery": {**delivery, "status": "cancelled", "error": "Telegram delivery requires an active administrator."}}
+                row.save(update_fields=["progress"])
+            return
         if delivery.get("status") != "pending":
             return
         if delivery.get("due_at") and datetime.fromisoformat(delivery["due_at"]) > timezone.now():
@@ -139,9 +146,16 @@ def send_report_file(report_id):
 
 @shared_task(name="assistant.research_report", soft_time_limit=1140, time_limit=1200)
 def research_report(report_id):
+    from .permissions import can_research
     with transaction.atomic():
         row = m.Report.objects.select_for_update().get(pk=report_id)
-        if row.status != "queued" or state(row.user).paused:
+        if row.status != "queued":
+            return
+        if not can_research(row.user):
+            row.status, row.error = "cancelled", "Research requires an active administrator."
+            row.save(update_fields=["status", "error", "updated_at"])
+            return
+        if state(row.user).paused:
             return
         row.status = "running"
         row.save()
@@ -234,6 +248,7 @@ def execute_run(run_id):
 
 @shared_task(name="assistant.execute_occurrence")
 def execute_occurrence(occurrence_id):
+    from .permissions import can_use_tools
     task_id = m.ScheduledOccurrence.objects.filter(pk=occurrence_id).values_list("task_id", flat=True).first()
     if not task_id:
         return
@@ -243,7 +258,13 @@ def execute_occurrence(occurrence_id):
         row = m.ScheduledOccurrence.objects.select_for_update(of=("self",)).select_related("task__user").filter(pk=occurrence_id).first()
         if not row:
             return
-        if row.status != "pending" or state(row.task.user).paused:
+        if row.status != "pending":
+            return
+        if not can_use_tools(row.task.user):
+            row.status, row.error = "cancelled", "Scheduled execution requires an active administrator."
+            row.save(update_fields=["status", "error"])
+            return
+        if state(row.task.user).paused:
             return
         row.status = "running"
         row.started_at = timezone.now()
@@ -357,8 +378,13 @@ def process_command(command_id):
 @shared_task(name="assistant.deliver_command")
 def deliver_command(delivery_id):
     from .integrations.telegram import send_message, TelegramRateLimit
+    from .permissions import can_use_tools
     with transaction.atomic():
         row = m.Delivery.objects.select_for_update().select_related("user").get(pk=delivery_id)
+        if not can_use_tools(row.user):
+            row.status, row.error = "failed", "Telegram delivery is administrator-only."
+            row.save(update_fields=["status", "error"])
+            return
         if row.status != "pending" or row.due_at > timezone.now():
             return
         if row.created_at < timezone.now()-timedelta(hours=24):
@@ -425,7 +451,9 @@ def process_telegram(update_id):
         row.status, row.started_at = "running", timezone.now()
         row.save(update_fields=["status", "started_at"])
     try:
-        user = get_user_model().objects.get(is_active=True)
+        user = get_user_model().objects.filter(is_active=True, is_staff=True).order_by("pk").first()
+        if user is None:
+            raise ValueError("No active workspace administrator is configured.")
         if "callback_query" in row.payload:
             from .telegram_buttons import resolve
             from .commands import decide

@@ -187,7 +187,7 @@ def test_conversation_profile_is_pinned(client, user):
 
 
 def test_other_owner_cannot_read_command_or_proposal(client, user):
-    other = get_user_model().objects.create_user(username="other", is_active=False)
+    other = get_user_model().objects.create_user(username="other", is_staff=True)
     proposal = reminder(other)
     assert client.get(f"/v1/commands/{proposal.action.command_id}/").status_code == 404
     assert client.get(f"/v1/action-proposals/{proposal.pk}/").status_code == 404

@@ -6,6 +6,8 @@ from assistant import memory_views as mv
 from assistant import roadmap_views as rv
 from assistant import desktop_sessions as ds
 from assistant import whatsapp_watch as ww
+from assistant import auth_views as av
+from assistant import analytics_views as analytics
 
 urlpatterns = [path("", v.dashboard), path("health/", v.health)]
 for suffix in ("", "/"):
@@ -14,6 +16,11 @@ for suffix in ("", "/"):
     path('v1/desktop/whatsapp/sync/', ww.sync),
     path('v1/desktop/whatsapp/<uuid:pk>/observe/', ww.observe),path(f"v1/auth/login{suffix}", v.login), path(f"v1/auth/logout{suffix}", v.logout), path(f"v1/turn{suffix}", v.turn)]
 urlpatterns += [
+    path('v1/auth/config/', av.config),
+    path('v1/auth/google/challenge/', av.challenge),
+    path('v1/auth/google/', av.google_login),
+    path('v1/auth/me/', av.me),
+    path('v1/admin/analytics/', analytics.analytics),
     path('v1/local/session/launch/',ds.launch),
     path('v1/local/session/exchange/',ds.exchange),
     path("v1/roadmap/", rv.board),
@@ -48,3 +55,9 @@ urlpatterns += [
     path("v1/calendar/connect/", v.calendar_connect), path("v1/calendar/callback/", v.calendar_callback), path("v1/calendar/events/", v.calendar_events),
     path("v1/export/", v.export_data), path("v1/history/", v.delete_history), path("v1/telegram/webhook/", v.telegram_webhook),
 ]
+
+from assistant import trial_telegram as tt
+urlpatterns += [path("v1/telegram/link/", tt.link), path("v1/telegram/send/", tt.send)]
+
+from assistant import image_views as iv
+urlpatterns += [path('v1/images/',iv.images),path('v1/images/<uuid:pk>/',iv.images),path('v1/images/<uuid:pk>/<str:action>/',iv.images)]

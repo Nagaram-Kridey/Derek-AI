@@ -66,7 +66,9 @@ def main():
                             pause(60)
                             continue
                         state["status"] = "ready"
-                    user = get_user_model().objects.get(is_active=True)
+                    user = get_user_model().objects.filter(is_active=True, is_staff=True).order_by("pk").first()
+                    if user is None:
+                        raise ValueError("No active workspace administrator is configured.")
                     owner_state, _ = m.AssistantState.objects.get_or_create(user=user)
                     updates = _call(
                         settings.TELEGRAM_BOT_TOKEN,

@@ -5,7 +5,8 @@ import dj_database_url
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR.parent / ".env", override=False)
+if os.getenv("DJANGO_SETTINGS_MODULE") != "config.trial_settings":
+    load_dotenv(BASE_DIR.parent / ".env", override=False)
 DEBUG = os.getenv("DJANGO_DEBUG", "false").lower() == "true"
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:
@@ -51,8 +52,8 @@ MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", str(BASE_DIR / "media")))
 MEDIA_URL = "/private-media/"
 REST_FRAMEWORK = {
     "URL_FORMAT_OVERRIDE": None,
-    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.TokenAuthentication"],
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_AUTHENTICATION_CLASSES": ["assistant.trial_authentication.WorkspaceTokenAuthentication"],
+    "DEFAULT_PERMISSION_CLASSES": ["assistant.permissions.WorkspaceAccess"],
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.UserRateThrottle"],
     "DEFAULT_THROTTLE_RATES": {"user": "300/min", "login": "10/min", "commands": "30/min"},
     "EXCEPTION_HANDLER": "assistant.api_errors.exception_handler",
@@ -102,6 +103,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 TELEGRAM_USER_ID = os.getenv("TELEGRAM_USER_ID") or TELEGRAM_CHAT_ID
 TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_SIGN_IN_CLIENT_ID = os.getenv("GOOGLE_SIGN_IN_CLIENT_ID", "").strip()
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://127.0.0.1:8000/v1/calendar/callback/")
 CREDENTIAL_ENCRYPTION_KEY = os.getenv("CREDENTIAL_ENCRYPTION_KEY", "")

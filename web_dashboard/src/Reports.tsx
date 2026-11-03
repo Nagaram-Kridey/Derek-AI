@@ -202,7 +202,7 @@ function ReportReader({
   );
 }
 
-export function ReportLibrary({ api, refresh, changed }: { api: Api; refresh: number; changed: () => void }) {
+export function ReportLibrary({ api, refresh, changed, allowTelegramDelivery = true }: { api: Api; refresh: number; changed: () => void; allowTelegramDelivery?: boolean }) {
   const createId = useRef(crypto.randomUUID());
   const reports = useResource<Report[]>(api, '/v1/reports/', refresh);
   const [error, setError] = useState<string | null>(null);
@@ -374,7 +374,7 @@ export function ReportLibrary({ api, refresh, changed }: { api: Api; refresh: nu
               )}
               {report.error && <div className="notice error">{report.error}</div>}
               <div className="actions">
-                {report.status === 'completed' && (
+                {allowTelegramDelivery && report.status === 'completed' && (
                   <button className="button primary small" onClick={() => setReader(String(report.id))}>
                     Read report
                     <Icon name="arrow" size={14} />
@@ -392,7 +392,7 @@ export function ReportLibrary({ api, refresh, changed }: { api: Api; refresh: nu
                     {format.toUpperCase()}
                   </button>
                 ))}
-                {report.status === 'completed' && (
+                {allowTelegramDelivery && report.status === 'completed' && (
                   <button
                     className="text-button"
                     disabled={
