@@ -184,6 +184,7 @@ def main():
     commands = parser.add_subparsers(dest='command')
     commands.add_parser('init', help='Generate fresh trial keys/directories; never copy personal data.')
     commands.add_parser('telegram-configure', help='Configure a dedicated trial Telegram bot without changing other settings.')
+    commands.add_parser('llm-configure', help='Configure your separate text LLM endpoint; image and speech providers stay separate.')
     commands.add_parser('configure', help='Interactively enter invitations, OAuth client, separate router key and ngrok domain/token.')
     owner = commands.add_parser('admin', help='Create the separate trial admin interactively.'); owner.add_argument('username')
     start = commands.add_parser('start', help='Back up, migrate and start manually.'); start.add_argument('--publish', action='store_true', help='Also publish configured ngrok HTTPS domain.')
@@ -214,6 +215,31 @@ def main():
             config['telegram_bot_username'] = username if token else ''
             save(config)
             print('Trial Telegram configuration saved. Restart trial to apply.')
+        elif args.command == 'llm-configure':
+            if owned_process(): raise ValueError('Stop the trial before configuring its text endpoint.')
+            config = load()
+            choice = input('Text provider [custom/freellmapi]: ').strip().lower()
+            if choice not in {'custom', 'freellmapi'}: raise ValueError('Choose custom or freellmapi.')
+            if choice == 'custom':
+                base = input('OpenAI-compatible base URL ending /v1: ').strip().rstrip('/')
+                parsed = urlsplit(base)
+                if (not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment
+                    or parsed.path.rstrip('/') != '/v1' or parsed.scheme not in {'https','http'}
+                    or (parsed.scheme == 'http' and parsed.hostname not in {'127.0.0.1','localhost','::1'})):
+                    raise ValueError('Use HTTPS /v1 or loopback HTTP /v1, without URL credentials.')
+                model = input('Model name: ').strip()
+                if not model or len(model)>160 or any(c.isspace() for c in model): raise ValueError('Enter a valid model name.')
+                config.update(custom_llm_base_url=base, custom_llm_model=model,
+                    custom_llm_api_key=getpass.getpass('API key (hidden): '),
+                    custom_llm_supports_tools=input('Supports OpenAI tool calls? [y/N]: ').strip().lower()=='y',
+                    custom_llm_supports_json_schema=input('Supports JSON schema responses? [y/N]: ').strip().lower()=='y')
+                if any(c.isspace() for c in config['custom_llm_api_key']):
+                    raise ValueError('API key cannot contain whitespace.')
+                if parsed.hostname not in {'127.0.0.1', 'localhost', '::1'} and not config['custom_llm_api_key']:
+                    raise ValueError('A remote model endpoint requires an API key.')
+            config['text_provider'] = choice
+            save(config)
+            print('Text provider saved. Restart the trial to apply. Image and speech settings unchanged.')
         elif args.command == 'configure':
             if owned_process(): raise ValueError('Stop the trial before configuring: python -m testing_workspace stop')
             config = load()
@@ -242,7 +268,14 @@ def main():
                 if args.publish and not meta.get('publish'):
                     raise ValueError('Local trial already running. Stop it, wait for status running:false, then start --publish.')
                 print('Test workspace already running.'); return
-            if args.publish and not all(config.get(k) for k in ['public_host', 'google_client_id', 'router_key']): raise ValueError('Publishing requires OAuth, router key and domain. Run configure first.')
+            if args.publish:
+                required = ['public_host', 'google_client_id']
+                if config.get('text_provider', 'freellmapi') == 'freellmapi' or (config.get('images_enabled') and config.get('image_provider') == 'freellmapi'):
+                    required.append('router_key')
+                if config.get('text_provider') == 'custom':
+                    required.extend(['custom_llm_base_url', 'custom_llm_model'])
+                if not all(config.get(k) for k in required):
+                    raise ValueError('Publishing requires OAuth, domain and configured provider credentials. Run configure or llm-configure first.')
             if args.publish and not config.get('open_signup') and not config.get('invited_emails'): raise ValueError('Invitation-only mode requires invited emails.')
             (DATA / 'static').mkdir(exist_ok=True)
             if not (ROOT / 'web_dashboard/dist/index.html').exists(): raise ValueError('Build frontend first: npm --prefix web_dashboard run build')

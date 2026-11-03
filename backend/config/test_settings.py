@@ -6,6 +6,9 @@ from pathlib import Path
 
 for name in (
     "GEMINI_API_KEY",
+    "CUSTOM_LLM_API_KEY",
+    "CUSTOM_LLM_BASE_URL",
+    "CUSTOM_LLM_MODEL",
     "FREELLMAPI_API_KEY",
     "CARTESIA_API_KEY",
     "CARTESIA_VOICE_ID",

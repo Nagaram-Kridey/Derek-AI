@@ -35,7 +35,7 @@ def record_observation(user, provider, model, operation, elapsed_ms, error=None)
         with transaction.atomic():
             ModelObservation.objects.create(
                 user=user,
-                provider=provider if provider in {"gemini", "ollama", "freellmapi"} else "unknown",
+                provider=provider if provider in {"gemini", "ollama", "freellmapi", "custom"} else "unknown",
                 model_name=model_label(model),
                 operation=operation if re.fullmatch(r"[a-z_]{1,64}", operation) else "unknown",
                 status="cancelled" if code == "cancelled" else "failed" if code else "succeeded",

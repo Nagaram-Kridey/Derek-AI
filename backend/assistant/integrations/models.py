@@ -21,4 +21,9 @@ def create_gateway(profile=None):
         return FreeLLMAPIGateway(settings.FREELLMAPI_BASE_URL, settings.FREELLMAPI_API_KEY,
                                 settings.FREELLMAPI_MODEL, settings.FREELLMAPI_TIMEOUT_SECONDS,
                                 settings.FREELLMAPI_REASONING_EFFORT, settings.FREELLMAPI_RESEARCH_MODEL)
-    raise ConfigError("MODEL_PROVIDER must be gemini, ollama or freellmapi.")
+    if provider == "custom":
+        from .custom_llm import CustomLLMGateway
+        return CustomLLMGateway(settings.CUSTOM_LLM_BASE_URL, settings.CUSTOM_LLM_API_KEY,
+                                settings.CUSTOM_LLM_MODEL, settings.CUSTOM_LLM_TIMEOUT_SECONDS,
+                                settings.CUSTOM_LLM_SUPPORTS_TOOLS, settings.CUSTOM_LLM_SUPPORTS_JSON_SCHEMA)
+    raise ConfigError("MODEL_PROVIDER must be gemini, ollama, freellmapi or custom.")

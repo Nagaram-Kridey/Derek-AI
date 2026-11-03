@@ -35,7 +35,15 @@ GOOGLE_SIGN_IN_CLIENT_ID = _trial.get('google_client_id', '')
 GOOGLE_CLIENT_ID = GOOGLE_CLIENT_SECRET = GOOGLE_REDIRECT_URI = ''
 TELEGRAM_BOT_TOKEN = TELEGRAM_CHAT_ID = TELEGRAM_USER_ID = TELEGRAM_WEBHOOK_SECRET = ''
 CARTESIA_API_KEY = CARTESIA_VOICE_ID = GEMINI_API_KEY = ''
-MODEL_PROVIDER = 'freellmapi'
+MODEL_PROVIDER = _trial.get('text_provider', 'freellmapi')
+if MODEL_PROVIDER not in {'freellmapi', 'custom'}:
+    raise RuntimeError('Unsupported trial text provider.')
+CUSTOM_LLM_BASE_URL = _trial.get('custom_llm_base_url', '')
+CUSTOM_LLM_MODEL = _trial.get('custom_llm_model', '')
+CUSTOM_LLM_API_KEY = _trial.get('custom_llm_api_key', '')
+CUSTOM_LLM_TIMEOUT_SECONDS = 120
+CUSTOM_LLM_SUPPORTS_TOOLS = _trial.get('custom_llm_supports_tools', False) is True
+CUSTOM_LLM_SUPPORTS_JSON_SCHEMA = _trial.get('custom_llm_supports_json_schema', False) is True
 FREELLMAPI_API_KEY = _trial.get('router_key', '')
 FREELLMAPI_BASE_URL = 'http://127.0.0.1:3001/v1'
 FREELLMAPI_MODEL = FREELLMAPI_RESEARCH_MODEL = 'auto:fast'

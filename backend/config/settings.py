@@ -127,3 +127,11 @@ if os.getenv("AWS_STORAGE_BUCKET_NAME"):
         "default_acl": None, "querystring_auth": True, "file_overwrite": False,
     }}
 LOGGING = {"version": 1, "disable_existing_loggers": False, "handlers": {"console": {"class": "logging.StreamHandler"}}, "root": {"handlers": ["console"], "level": "INFO"}, "loggers": {"httpx": {"level": "WARNING"}, "httpcore": {"level": "WARNING"}}}
+
+# Custom inference service: configured by the server administrator, never by clients.
+CUSTOM_LLM_BASE_URL = os.getenv("CUSTOM_LLM_BASE_URL", "")
+CUSTOM_LLM_API_KEY = os.getenv("CUSTOM_LLM_API_KEY", "")
+CUSTOM_LLM_MODEL = os.getenv("CUSTOM_LLM_MODEL", "")
+CUSTOM_LLM_TIMEOUT_SECONDS = int(os.getenv("CUSTOM_LLM_TIMEOUT_SECONDS", "120"))
+CUSTOM_LLM_SUPPORTS_TOOLS = os.getenv("CUSTOM_LLM_SUPPORTS_TOOLS", "false").lower() == "true"
+CUSTOM_LLM_SUPPORTS_JSON_SCHEMA = os.getenv("CUSTOM_LLM_SUPPORTS_JSON_SCHEMA", "false").lower() == "true"

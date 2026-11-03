@@ -105,7 +105,7 @@ class BudgetGateway:
                 from .telemetry import record_observation
                 model = getattr(self.gateway, "last_requested_model", None) or {
                     "gemini": settings.GEMINI_MODEL, "ollama": settings.OLLAMA_MODEL,
-                    "freellmapi": settings.FREELLMAPI_MODEL,
+                    "custom": settings.CUSTOM_LLM_MODEL, "freellmapi": settings.FREELLMAPI_MODEL,
                 }.get(self.provider, "unknown")
                 record_observation(self.user, self.provider, model, name,
                                    elapsed_ms if elapsed_ms is not None else (time.monotonic() - started) * 1000,
@@ -118,7 +118,7 @@ class BudgetGateway:
     def _health(self, succeeded, error=""):
         from .models import ModelHealth
         model_name = {"gemini": settings.GEMINI_MODEL, "ollama": settings.OLLAMA_MODEL,
-                      "freellmapi": settings.FREELLMAPI_MODEL}.get(self.provider, "")
+                      "custom": settings.CUSTOM_LLM_MODEL, "freellmapi": settings.FREELLMAPI_MODEL}.get(self.provider, "")
         if self.provider == "freellmapi":
             model_name = self.gateway.last_requested_model
         changes = {"last_success_at" if succeeded else "last_failure_at": timezone.now()}

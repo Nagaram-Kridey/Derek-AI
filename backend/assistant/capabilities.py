@@ -96,14 +96,24 @@ def preferences(user):
 def profile_details(user, profile):
     provider = "gemini" if profile == "gemini" else settings.MODEL_PROVIDER
     model = {"gemini": settings.GEMINI_MODEL, "ollama": settings.OLLAMA_MODEL,
-             "freellmapi": settings.FREELLMAPI_MODEL}.get(provider, "")
+             "custom": settings.CUSTOM_LLM_MODEL, "freellmapi": settings.FREELLMAPI_MODEL}.get(provider, "")
     configured = (
         bool(settings.GEMINI_API_KEY and model)
         if provider == "gemini"
         else bool(model and settings.FREELLMAPI_BASE_URL and settings.FREELLMAPI_API_KEY)
         if provider == "freellmapi"
+        else bool(model and settings.CUSTOM_LLM_BASE_URL)
+        if provider == "custom"
         else bool(model and settings.OLLAMA_BASE_URL)
     )
+    if provider == "custom" and configured:
+        from .integrations.custom_llm import CustomLLMGateway
+        from .integrations.errors import ConfigError
+        try:
+            CustomLLMGateway(settings.CUSTOM_LLM_BASE_URL, settings.CUSTOM_LLM_API_KEY,
+                             model, settings.CUSTOM_LLM_TIMEOUT_SECONDS)
+        except (ConfigError, ValueError):
+            configured = False
     status, reason = (
         ("unverified", "Configured; no recent successful provider call is recorded.")
         if configured
@@ -149,6 +159,8 @@ def profile_details(user, profile):
         if provider == "gemini"
         else "Prompts pass through your FreeLLMAPI router to its enabled upstream providers; routing may change the served model."
         if provider == "freellmapi"
+        else "Prompts are sent to the administrator-configured custom inference service."
+        if provider == "custom"
         else "Inference uses this server's Ollama installation; messages still pass through this service.",
     }
 
@@ -203,6 +215,11 @@ def catalog(user, profile=None):
             )
         elif dependency == "scheduler" and not scheduler:
             reason = "Drafts can be saved; background delivery is waiting for a scheduler heartbeat."
+        if model["provider"] == "custom" and not settings.CUSTOM_LLM_SUPPORTS_TOOLS:
+            status, reason = "needs_setup", "Custom LLM tool calling is disabled; ordinary text chat remains available."
+        elif (model["provider"] == "custom" and name == "run_deep_research"
+              and not settings.CUSTOM_LLM_SUPPORTS_JSON_SCHEMA):
+            status, reason = "needs_setup", "Custom LLM structured output is disabled; research requires JSON schema support."
         if assistant_state.paused and name != "control_workspace" and name in {
             *MUTATIONS,
             "run_deep_research",
